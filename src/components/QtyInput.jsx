@@ -21,6 +21,7 @@ export default function QtyInput({ value, onChange }) {
         inputMode="numeric"
         min="1"
         value={draft}
+        style={{ '--digits': Math.max(2, String(draft || value).length) }} // a largura acompanha o nº de dígitos
         onChange={(e) => { setDraft(e.target.value); commit(e.target.value) }}
         onBlur={() => setDraft(String(value))} // vazio ou 0 -> volta ao valor atual
       />

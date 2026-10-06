@@ -13,7 +13,7 @@ import { matchesCategorias } from '../lib/categorias.js'
 
 const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
-export default function Vender({ vendedor, goTo }) {
+export default function Vender({ vendedor, atividade, goTo }) {
   const toast = useToast()
   const products = useQuery(listProducts)
   const nucleos = useQuery(listNucleos)
@@ -48,7 +48,8 @@ export default function Vender({ vendedor, goTo }) {
   }
 
   async function finalizar() {
-    if (!vendedor.trim()) return toast('Indica quem está a vender (campo "Vendedor" no topo).', 'error')
+    if (!atividade.trim()) return toast('Define a atividade em Configurações.', 'error')
+    if (!vendedor.trim()) return toast('Define o responsável em Configurações.', 'error')
     if (!nucleo) return toast('Escolhe o núcleo do comprador.', 'error')
     if (venda.error) return toast(`Desconto: ${venda.error}`, 'error')
     const semPreco = lines.filter((l) => !(l.product.valor > 0))
@@ -64,7 +65,7 @@ export default function Vender({ vendedor, goTo }) {
     setBusy(true)
     try {
       const r = await registerSale({
-        items, nome, nucleo, vendedor, observacao, allowNegative,
+        items, nome, nucleo, vendedor, atividade, observacao, allowNegative,
         desconto: venda.desconto > 0 ? { mode: descontoMode, value: descontoValue } : null,
       })
       toast(`Venda registada: ${formatEuro(r.total)}`)
@@ -123,6 +124,12 @@ export default function Vender({ vendedor, goTo }) {
 
       <aside className="cart" id="carrinho">
         <h2>Carrinho</h2>
+        {(!atividade.trim() || !vendedor.trim()) && (
+          <div className="session-warning">
+            Falta definir {!atividade.trim() && 'a atividade'}{!atividade.trim() && !vendedor.trim() && ' e '}{!vendedor.trim() && 'o responsável'}.
+            <button type="button" className="small" onClick={() => goTo('config')}>Abrir Configurações</button>
+          </div>
+        )}
         {!lines.length && <p className="muted">Clica num produto para adicionar.</p>}
         <ul className="cart-lines">
           {lines.map((l) => (

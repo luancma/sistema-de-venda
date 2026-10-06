@@ -43,14 +43,10 @@ sem instalar nada e sem internet. Pensado para computadores (Windows, macOS, Lin
 
 Os dados ficam no browser de cada computador: cada posto de venda exporta o seu CSV no fim do dia.
 
-### Configurações (área restrita)
+### Configurações
 
-O separador **Configurações** não aparece no menu. Abre-se acrescentando `#config` ao endereço
-(ex.: `http://localhost:5173/#config` ou `…/loja.html#config`) e pede a senha. Fica desbloqueado até fechar
-o separador do browser ou carregar em **Bloquear e sair**. Para mudar a senha, ver `src/components/ConfigGate.jsx`.
-
-> É uma proteção simples para evitar alterações por engano: como tudo corre no browser,
-> não substitui segurança a sério (quem tiver acesso ao dispositivo e conhecimentos técnicos consegue contorná-la).
+O separador **Configurações** (no menu) tem os núcleos, o backup/restauro da base de dados, "Apagar vendas/tudo"
+e a consola SQL. Também abre pelo endereço `#config` (ex.: `http://localhost:5173/#config`).
 
 Os núcleos podem ser criados diretamente no ecrã **Vender** (botão **+ Novo**).
 
@@ -58,10 +54,10 @@ Os núcleos podem ser criados diretamente no ecrã **Vender** (botão **+ Novo**
 
 1. **Produtos → Importar CSV** com o stock inicial (ver `sample/produtos-exemplo.csv`).
 2. **Núcleos**: no ecrã Vender, botão **+ Novo** (podes colar vários separados por vírgula).
-3. Escreve o teu nome em **Vendedor** (topo).
+3. No topo, preenche **Atividade** (ex.: "Feira de outubro") e **Responsável** (o teu nome). Ficam guardados em cada venda.
 4. **Vender**: clica nos produtos, escolhe o núcleo (e opcionalmente o nome do comprador) e *Finalizar venda*.
    O stock é descontado automaticamente.
-5. Fim do dia: **Vendas do dia → Exportar CSV**. Uma venda errada pode ser *Anulada* (repõe o stock).
+5. Fim do dia: **Vendas do dia → Exportar CSV** (podes filtrar por atividade). Uma venda errada pode ser *Anulada* (repõe o stock); **Recibo** mostra/imprime o comprovativo.
 6. Opcional: **Produtos → Exportar stock** gera o CSV com as quantidades que sobraram (pode ser importado no dia seguinte).
 
 ## CSV de inicialização
@@ -81,7 +77,7 @@ T-shirt Logo	20	M	12,50
 **Produto** (`products`): `id` (uuid), `nome`, `qtd`, `tamanho`, `valor`, `promocao` (opcional), `preco_especial` (opcional).
 
 **Transação** (`transactions`) — uma linha por produto em cada venda:
-`id` (uuid), `nome_produto`, `nome` (comprador), `preco` (total da linha, já com promoção), `nucleo`, `vendedor` (quem vendeu),
+`id` (uuid), `nome_produto`, `nome` (comprador), `preco` (total da linha, já com promoção), `nucleo`, `vendedor` (o **Responsável**; no CSV: `RESPONSAVEL`), `atividade` (campo **Atividade** do topo),
 mais campos de contexto: `venda_id` (agrupa o carrinho), `data`, `produto_id`, `tamanho`, `quantidade`,
 `preco_unitario`, `desconto` (promoção do produto), `promocao`, `observacao` (texto livre; **obrigatória quando se vende acima do stock**),
 `desconto_venda` (parte desta linha do desconto dado no carrinho) e `desconto_info` (ex.: `10%`, `-5,00 €`, `novo total 40,00 €`).

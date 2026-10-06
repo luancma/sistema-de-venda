@@ -27,3 +27,28 @@ export function matchesCategorias(product, selected) {
   const cats = parseCategorias(product.categorias)
   return selected.every((c) => cats.includes(c))
 }
+
+/** chave para detetar categorias "parecidas": sem acentos, só letras/números, sem plural em S */
+export const similarKey = (c) =>
+  String(c).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/S$/, '')
+
+/** grupos de categorias parecidas (ex.: CAMISETA / CAMISETAS / CAMISETA-) — só grupos com 2+ nomes */
+export function similarGroups(names) {
+  const groups = new Map()
+  for (const n of names) {
+    const k = similarKey(n)
+    if (!groups.has(k)) groups.set(k, [])
+    groups.get(k).push(n)
+  }
+  return [...groups.values()].filter((g) => g.length > 1)
+}
+
+/** substitui (ou remove, se `to` vazio) uma categoria na lista de um produto, sem repetidos */
+export function replaceCategoria(list, from, to) {
+  const out = []
+  for (const c of list) {
+    const v = c === from ? to : c
+    if (v && !out.includes(v)) out.push(v)
+  }
+  return out
+}

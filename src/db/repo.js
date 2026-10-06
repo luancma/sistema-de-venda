@@ -1,6 +1,6 @@
 import { all, get, run, write, uuid } from './database.js'
 import { priceLine, saleDiscount, allocateDiscount, formatEuro } from '../lib/pricing.js'
-import { parseCategorias, joinCategorias } from '../lib/categorias.js'
+import { parseCategorias, joinCategorias, replaceCategoria } from '../lib/categorias.js'
 
 // ================= Produtos =================
 export const listProducts = () =>
@@ -92,7 +92,7 @@ export function describeDiscount(mode, value, d) {
  * `desconto` (opcional): { mode: 'valor' | 'percent' | 'total', value } — desconto dado no carrinho,
  * repartido pelas linhas proporcionalmente ao valor de cada uma (a soma bate certo ao cêntimo).
  */
-export const registerSale = ({ items, nome, nucleo, vendedor, observacao = '', allowNegative = false, desconto = null }) =>
+export const registerSale = ({ items, nome, nucleo, vendedor, atividade = '', observacao = '', allowNegative = false, desconto = null }) =>
   write(() => {
     const vendaId = uuid()
     const data = new Date().toISOString()
@@ -121,11 +121,11 @@ export const registerSale = ({ items, nome, nucleo, vendedor, observacao = '', a
       const preco = Math.round((price.total - shares[i]) * 100) / 100
       run(
         `INSERT INTO transactions (id, venda_id, data, produto_id, nome_produto, tamanho, quantidade,
-           preco_unitario, desconto, preco, promocao, nome, nucleo, vendedor, observacao, desconto_venda, desconto_info)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           preco_unitario, desconto, preco, promocao, nome, nucleo, vendedor, observacao, desconto_venda, desconto_info, atividade)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [uuid(), vendaId, data, p.id, p.nome, p.tamanho, quantidade, price.unitario, price.desconto,
           preco, p.promocao || (p.preco_especial != null ? 'PRECO_ESPECIAL' : null),
-          (nome || '').trim(), nucleo || '', (vendedor || '').trim(), observacao.trim(), shares[i], info],
+          (nome || '').trim(), nucleo || '', (vendedor || '').trim(), observacao.trim(), shares[i], info, (atividade || '').trim()],
       )
       run('UPDATE products SET qtd = qtd - ? WHERE id = ?', [quantidade, p.id])
       total += preco
@@ -150,3 +150,26 @@ export function listTransactions(fromDate, toDate) {
 
 export const listSellers = () =>
   all(`SELECT DISTINCT vendedor FROM transactions WHERE vendedor <> '' ORDER BY vendedor`).map((r) => r.vendedor)
+
+/** Atividades já usadas (para sugerir no campo do topo). */
+export const listAtividades = () =>
+  all(`SELECT DISTINCT atividade FROM transactions WHERE atividade <> '' ORDER BY atividade`).map((r) => r.atividade)
+
+/**
+ * Renomeia uma categoria em todos os produtos. Se `to` já existir, as duas ficam juntas (sem repetidos).
+ * Com `to` vazio remove a categoria dos produtos (os produtos não são apagados).
+ * @returns nº de produtos alterados
+ */
+export const renameCategoria = (from, to) =>
+  write(() => {
+    const target = parseCategorias(to)[0] || ''
+    let n = 0
+    for (const p of all("SELECT id, categorias FROM products WHERE categorias IS NOT NULL AND categorias <> ''")) {
+      const cats = parseCategorias(p.categorias)
+      if (!cats.includes(from)) continue
+      run('UPDATE products SET categorias = ? WHERE id = ?', [joinCategorias(replaceCategoria(cats, from, target)), p.id])
+      n++
+    }
+    return n
+  })
+export const removeCategoria = (name) => renameCategoria(name, '')

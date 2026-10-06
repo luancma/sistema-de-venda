@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS transactions (
   vendedor        TEXT NOT NULL DEFAULT '', -- quem vendeu
   observacao      TEXT NOT NULL DEFAULT '', -- obrigatória ao vender sem stock
   desconto_venda  REAL NOT NULL DEFAULT 0,  -- parte desta linha do desconto dado no carrinho
-  desconto_info   TEXT NOT NULL DEFAULT ''  -- como foi dado: "10%", "-5,00 €", "total 40,00 €"
+  desconto_info   TEXT NOT NULL DEFAULT '', -- como foi dado: "10%", "-5,00 €", "total 40,00 €"
+  atividade       TEXT NOT NULL DEFAULT ''  -- atividade/evento em que a venda foi feita
 );
 CREATE INDEX IF NOT EXISTS idx_tx_data ON transactions(data);
 CREATE INDEX IF NOT EXISTS idx_tx_venda ON transactions(venda_id);
@@ -57,6 +58,9 @@ function migrate(database) {
   }
   if (!cols.includes('desconto_venda')) {
     database.exec('ALTER TABLE transactions ADD COLUMN desconto_venda REAL NOT NULL DEFAULT 0')
+  }
+  if (!cols.includes('atividade')) {
+    database.exec("ALTER TABLE transactions ADD COLUMN atividade TEXT NOT NULL DEFAULT ''")
   }
   if (!cols.includes('desconto_info')) {
     database.exec("ALTER TABLE transactions ADD COLUMN desconto_info TEXT NOT NULL DEFAULT ''")

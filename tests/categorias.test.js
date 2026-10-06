@@ -18,3 +18,15 @@ describe('categorias', () => {
     expect(ps.filter((p) => matchesCategorias(p, [])).length).toBe(4)
   })
 })
+
+import { similarGroups, replaceCategoria } from '../src/lib/categorias.js'
+describe('gestão de categorias', () => {
+  it('deteta parecidas', () => {
+    expect(similarGroups(['CAMISETA', 'CAMISETAS', 'OLGA', 'BOTÃO', 'BOTAO', 'UP'])).toEqual([['CAMISETA', 'CAMISETAS'], ['BOTÃO', 'BOTAO']])
+  })
+  it('renomeia / junta / remove', () => {
+    expect(replaceCategoria(['CAMISETAS', 'OLGA'], 'CAMISETAS', 'CAMISETA')).toEqual(['CAMISETA', 'OLGA'])
+    expect(replaceCategoria(['CAMISETA', 'CAMISETAS'], 'CAMISETAS', 'CAMISETA')).toEqual(['CAMISETA'])
+    expect(replaceCategoria(['CAMISETA', 'OLGA'], 'OLGA', '')).toEqual(['CAMISETA'])
+  })
+})

@@ -4,6 +4,7 @@ import { listTransactions, cancelSale } from '../db/repo.js'
 import { toCsv, ptNumber, downloadFile } from '../lib/csv.js'
 import { formatEuro, promoCodeLabel } from '../lib/pricing.js'
 import { useToast } from '../components/Toast.jsx'
+import ReceiptModal from '../components/ReceiptModal.jsx'
 
 const today = () => new Date().toLocaleDateString('sv-SE') // YYYY-MM-DD local
 const fmtDateTime = (iso) => new Date(iso).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' })
@@ -28,20 +29,25 @@ const EXPORT_COLUMNS = [
   { header: 'PROMOCAO', value: 'promocao' },
   { header: 'NOME', value: 'nome' },
   { header: 'NUCLEO', value: 'nucleo' },
-  { header: 'QUEM VENDEU', value: 'vendedor' },
+  { header: 'ATIVIDADE', value: 'atividade' },
+  { header: 'RESPONSAVEL', value: 'vendedor' },
   { header: 'OBSERVACAO', value: 'observacao' },
 ]
 
 export default function Vendas() {
+  const [receipt, setReceipt] = useState(null) // venda cujo recibo está aberto
   const toast = useToast()
   const [from, setFrom] = useState(today)
   const [to, setTo] = useState(today)
-  const rows = useQuery(() => listTransactions(from, to), [from, to])
+  const rowsAll = useQuery(() => listTransactions(from, to), [from, to])
+  const [ativ, setAtiv] = useState('') // filtro por atividade ('' = todas)
+  const atividades = useMemo(() => [...new Set(rowsAll.map((t) => t.atividade).filter(Boolean))].sort(), [rowsAll])
+  const rows = useMemo(() => (ativ ? rowsAll.filter((t) => t.atividade === ativ) : rowsAll), [rowsAll, ativ])
 
   const sales = useMemo(() => {
     const map = new Map()
     for (const t of rows) {
-      if (!map.has(t.venda_id)) map.set(t.venda_id, { id: t.venda_id, data: t.data, nome: t.nome, nucleo: t.nucleo, vendedor: t.vendedor, observacao: t.observacao, lines: [], total: 0 })
+      if (!map.has(t.venda_id)) map.set(t.venda_id, { id: t.venda_id, data: t.data, nome: t.nome, nucleo: t.nucleo, vendedor: t.vendedor, atividade: t.atividade, observacao: t.observacao, lines: [], total: 0 })
       const s = map.get(t.venda_id)
       s.lines.push(t)
       s.total += t.preco
@@ -62,7 +68,8 @@ export default function Vendas() {
 
   function exportCsv() {
     const csv = toCsv([...rows].reverse(), EXPORT_COLUMNS, ';')
-    downloadFile(from === to ? `vendas-${from}.csv` : `vendas-${from}_a_${to}.csv`, csv)
+    const slug = ativ ? '-' + ativ.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase() : ''
+    downloadFile(from === to ? `vendas-${from}${slug}.csv` : `vendas-${from}_a_${to}${slug}.csv`, csv)
   }
 
   async function cancel(s) {
@@ -79,6 +86,14 @@ export default function Vendas() {
             <label className="inline">De <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
             <label className="inline">Até <input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
             <button onClick={() => { setFrom(today()); setTo(today()) }}>Hoje</button>
+            {atividades.length > 0 && (
+              <label className="inline">Atividade
+                <select value={ativ} onChange={(e) => setAtiv(e.target.value)}>
+                  <option value="">Todas</option>
+                  {atividades.map((a) => <option key={a}>{a}</option>)}
+                </select>
+              </label>
+            )}
           </div>
           <button className="primary" onClick={exportCsv} disabled={!rows.length}>Exportar CSV ({rows.length} linhas)</button>
         </div>
@@ -103,9 +118,11 @@ export default function Vendas() {
               <span><strong>{from === to ? fmtTime(s.data) : fmtDateTime(s.data)}</strong></span>
               <span>{s.nome || <span className="muted">sem nome</span>}</span>
               <span className="chip">{s.nucleo}</span>
-              <span className="muted">por {s.vendedor}</span>
+              {s.atividade && <span className="chip atividade-chip">{s.atividade}</span>}
+              <span className="muted">resp. {s.vendedor}</span>
               {s.descontoVenda > 0 && <span className="badge">desconto {s.descontoInfo} −{formatEuro(s.descontoVenda)}</span>}
               <strong className="grow num">{formatEuro(s.total)}</strong>
+              <button className="small" onClick={() => setReceipt(s)}>Recibo</button>
               <button className="danger small" onClick={() => cancel(s)}>Anular</button>
             </div>
             {s.observacao && <p className="sale-obs">Obs.: {s.observacao}</p>}
@@ -121,6 +138,7 @@ export default function Vendas() {
           </div>
         ))}
       </section>
+      {receipt && <ReceiptModal sale={receipt} onClose={() => setReceipt(null)} />}
     </div>
   )
 }

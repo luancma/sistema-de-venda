@@ -559,3 +559,107 @@ label.button { flex-direction: row; align-items: center; }
 .discount-modes button.on { background: var(--orange); color: var(--navy-deep); border-color: var(--orange); }
 .discount-preview { color: var(--orange); font-size: 10px; margin: 0; }
 .discount-line { color: var(--orange); }
+
+/* ---------- recibo (papel branco, letra monoespaçada, como um talão) ---------- */
+.receipt-wrap { display: flex; flex-direction: column; gap: 1rem; width: min(380px, 100%); max-height: 92vh; overflow: auto; }
+.receipt {
+  background: #fff; color: #111; padding: 1.4rem 1.2rem;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 13px; line-height: 1.45; word-spacing: 0;
+}
+.receipt * { font-family: inherit; }
+.receipt header, .receipt footer { text-align: center; }
+.receipt-shop { font-family: var(--pixel) !important; font-size: 16px; margin-bottom: .4rem; }
+.receipt-small { font-size: 11px; color: #555; }
+.receipt-sep { border-top: 1px dashed #999; margin: .7rem 0; }
+.receipt dl { display: grid; grid-template-columns: auto 1fr; gap: .15rem .8rem; margin: 0; }
+.receipt dt { color: #555; }
+.receipt dd { margin: 0; text-align: right; }
+.receipt table { width: 100%; border-collapse: collapse; }
+.receipt td { border: none; padding: .25rem 0; font-size: 13px; vertical-align: top; background: none !important; color: #111; }
+.receipt td.num { text-align: right; white-space: nowrap; padding-left: .8rem; }
+.receipt-total td { font-weight: 700; font-size: 16px; padding-top: .4rem; }
+.receipt p { margin: 0; }
+
+@media print {
+  @page { margin: 8mm; }
+  body.printing-receipt { background: #fff !important; }
+  body.printing-receipt * { visibility: hidden; }
+  body.printing-receipt .receipt, body.printing-receipt .receipt * { visibility: visible; }
+  body.printing-receipt .receipt { position: absolute; left: 0; top: 0; width: 80mm; padding: 0; }
+  body.printing-receipt .modal-backdrop { background: none; }
+}
+
+/* topo: Atividade + Responsável */
+.header-fields { display: flex; gap: 1rem; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+.header-fields .seller { margin-left: 0; }
+.atividade-chip { border-color: var(--ocean); color: var(--ocean); }
+@media (max-width: 600px) {
+  .header-fields { width: 100%; flex-direction: column; gap: .5rem; }
+  .header-fields .seller { width: 100%; justify-content: space-between; }
+  .header-fields .seller input { flex: 1; max-width: 70%; }
+}
+
+/* separadores sempre todos visíveis (no telemóvel passam para a linha de baixo em vez de ficarem escondidos) */
+@media (max-width: 600px) {
+  .tabs { flex-wrap: wrap; overflow-x: visible; row-gap: .3rem; }
+}
+.tabs button.active:hover:not(:disabled) { background: var(--yellow); color: var(--navy-deep); }
+
+/* interruptor (toggle) */
+.toggle { flex-direction: row; align-items: center; gap: .7rem; cursor: pointer; font-size: 11px; width: fit-content; }
+.toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.toggle-track { position: relative; width: 44px; height: 22px; border: 2px solid var(--line); background: var(--navy-deep); flex: none; }
+.toggle-track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; background: var(--line); transition: left .12s; }
+.toggle input:checked + .toggle-track { border-color: var(--yellow); background: var(--navy-light); }
+.toggle input:checked + .toggle-track::after { left: 24px; background: var(--yellow); }
+.toggle input:focus-visible + .toggle-track { outline: 2px solid var(--yellow); outline-offset: 2px; }
+
+/* gestão de categorias */
+.dupes { display: flex; flex-direction: column; gap: .5rem; margin-bottom: 1rem; font-size: 10px; }
+.chip-edit { gap: .4rem; padding: .25rem .4rem; }
+.chip-edit input { width: 12rem; padding: .35rem .4rem; font-size: 11px; margin: 0; }
+.chip .chip-x { color: var(--muted); border: none; padding: 0 .2rem; margin: 0; font-size: 11px; }
+.chip .chip-x:hover:not(:disabled) { color: var(--yellow); background: none; }
+
+/* topo: atividade/responsável só para leitura */
+.session-info {
+  margin-left: auto; display: flex; gap: 1.2rem; flex-wrap: wrap; justify-content: flex-end;
+  border: none; background: none; color: var(--muted); font-size: 10px; padding: .3rem; text-align: right;
+}
+.session-info strong { color: var(--text); font-weight: 400; }
+.session-info strong.missing { color: var(--pink); }
+.session-warning {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; font-size: 10px;
+  color: var(--pink); border: 2px dashed var(--pink); padding: .6rem;
+}
+@media (max-width: 600px) {
+  .session-info { margin-left: 0; width: 100%; justify-content: flex-start; text-align: left; gap: .8rem; }
+}
+
+/* ícones nos chips (categorias / núcleos): área de toque grande, também no telemóvel */
+.chip-icon {
+  display: inline-grid; place-items: center; min-width: 34px; min-height: 34px; padding: 0; margin: 0;
+  border: 2px solid var(--border); background: var(--navy); color: var(--text);
+}
+.chip-icon:hover:not(:disabled) { border-color: var(--yellow); color: var(--yellow); background: var(--navy-light); }
+.chip-icon.danger-icon { color: var(--pink); }
+.chip-icon.danger-icon:hover:not(:disabled) { border-color: var(--pink); color: var(--pink); }
+.chip:has(.chip-icon) { gap: .45rem; padding: .3rem .3rem .3rem .7rem; font-size: 11px; }
+.chip .chip-x { font-size: 18px; min-width: 34px; min-height: 34px; display: inline-grid; place-items: center; }
+.chip-edit button.small { min-height: 34px; }
+@media (max-width: 600px) {
+  .chip-icon, .chip .chip-x { min-width: 44px; min-height: 44px; }
+  .chip-icon svg { width: 22px; height: 22px; }
+  .chip:has(.chip-icon) { font-size: 12px; }
+  .chip-edit { flex-wrap: wrap; }
+  .chip-edit input { width: 100%; }
+}
+.confirm-body p { margin: 0 0 .5rem; }
+
+/* quantidade no carrinho: largura ajusta-se aos dígitos e sem as setas do browser */
+.cart-lines .qty input {
+  width: calc(var(--digits, 2) * 1ch + 1.4rem); min-width: 3.2rem; max-width: 7rem;
+  text-align: center; padding: .5rem .3rem; -moz-appearance: textfield; appearance: textfield;
+}
+.cart-lines .qty input::-webkit-outer-spin-button,
+.cart-lines .qty input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
