@@ -14,8 +14,8 @@ describe('parseProductsCsv', () => {
     const { products, errors } = parseProductsCsv(csv)
     expect(errors).toEqual([])
     expect(products).toEqual([
-      { nome: 'T-shirt', qtd: 20, tamanho: 'M', valor: 12.5, promocao: null, preco_especial: null },
-      { nome: 'Caneca', qtd: 5, tamanho: '', valor: 6, promocao: null, preco_especial: null },
+      { nome: 'T-shirt', qtd: 20, tamanho: 'M', valor: 12.5, promocao: null, preco_especial: null, categorias: [] },
+      { nome: 'Caneca', qtd: 5, tamanho: '', valor: 6, promocao: null, preco_especial: null, categorias: [] },
     ])
   })
   it('aceita ; com BOM, acentos e colunas opcionais', () => {
@@ -46,5 +46,14 @@ describe('VALOR vazio e promoções em texto livre', () => {
       ['LEVE_2_PAGUE_1', null], ['PACK_3', 10], ['LEVE_4_PAGUE_3', null], [null, null],
     ])
     expect(r.warnings).toHaveLength(1)
+  })
+})
+
+describe('CATEGORIA', () => {
+  it('lê várias categorias por produto e "DEFAULT" como sem tamanho', () => {
+    const csv = 'NOME,QTD,TAMANHO,VALOR,CATEGORIA\nC. OLGA - M,12,M,15,"CAMISETA, OLGA"\nBOTTON,40,DEFAULT,2,BOTTON\nX,1,,1,\n'
+    const { products, errors } = parseProductsCsv(csv)
+    expect(errors).toEqual([])
+    expect(products.map((p) => [p.tamanho, p.categorias])).toEqual([['M', ['CAMISETA', 'OLGA']], ['', ['BOTTON']], ['', []]])
   })
 })

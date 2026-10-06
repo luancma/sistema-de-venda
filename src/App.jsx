@@ -65,10 +65,16 @@ export default function App() {
   return (
     <ToastProvider>
       <header className="topbar">
-        <strong className="brand">
-          Loja
-          {offlineReady && <span className="offline-ok" title="Guardada neste dispositivo: funciona sem internet">✓ offline</span>}
-        </strong>
+        <div className="topbar-main">
+          <strong className="brand">
+            Loja
+            {offlineReady && <span className="offline-ok" title="Guardada neste dispositivo: funciona sem internet">✓ offline</span>}
+          </strong>
+          <label className="seller">
+            Vendedor
+            <input value={vendedor} onChange={(e) => setVendedor(e.target.value)} placeholder="O teu nome" />
+          </label>
+        </div>
         <nav className="tabs">
           {TABS.map((t) => (
             <button key={t.id} className={!configOpen && t.id === tab ? 'active' : ''} onClick={() => goTo(t.id)}>
@@ -77,10 +83,6 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <label className="seller">
-          Vendedor
-          <input value={vendedor} onChange={(e) => setVendedor(e.target.value)} placeholder="O teu nome" />
-        </label>
       </header>
       <main>
         {configOpen ? (

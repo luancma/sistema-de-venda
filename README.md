@@ -83,7 +83,14 @@ T-shirt Logo	20	M	12,50
 **Transação** (`transactions`) — uma linha por produto em cada venda:
 `id` (uuid), `nome_produto`, `nome` (comprador), `preco` (total da linha, já com promoção), `nucleo`, `vendedor` (quem vendeu),
 mais campos de contexto: `venda_id` (agrupa o carrinho), `data`, `produto_id`, `tamanho`, `quantidade`,
-`preco_unitario`, `desconto`, `promocao`, `observacao` (texto livre; **obrigatória quando se vende acima do stock**).
+`preco_unitario`, `desconto` (promoção do produto), `promocao`, `observacao` (texto livre; **obrigatória quando se vende acima do stock**),
+`desconto_venda` (parte desta linha do desconto dado no carrinho) e `desconto_info` (ex.: `10%`, `-5,00 €`, `novo total 40,00 €`).
+
+### Desconto no carrinho
+
+No carrinho, **% Dar desconto** permite descontar um **valor em €**, uma **percentagem** ou definir o **novo total** da venda.
+O desconto é repartido pelas linhas proporcionalmente ao valor de cada uma (a soma bate certo ao cêntimo),
+por isso o `PRECO` de cada linha no CSV já é o valor final cobrado.
 
 **Núcleos** (`nucleos`): `nome`.
 

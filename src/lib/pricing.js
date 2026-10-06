@@ -143,3 +143,61 @@ export function normalizePromo(text) {
   }
   return undefined
 }
+
+// ---------------------------------------------------------------------------
+// Desconto na venda (dado no carrinho)
+//   mode 'valor'   -> valor em € a descontar
+//   mode 'percent' -> percentagem sobre o subtotal
+//   mode 'total'   -> novo valor final da venda
+// ---------------------------------------------------------------------------
+
+/** "12,5" / "12.5" / "12,50 €" -> 12.5 ; vazio/inválido -> null */
+export function parseDecimal(raw) {
+  const s = String(raw ?? '').trim().replace(/[^\d,.-]/g, '').replace(',', '.')
+  if (!s) return null
+  const n = Number(s)
+  return Number.isFinite(n) ? n : null
+}
+
+/**
+ * @param {number} subtotal em euros (já com as promoções dos produtos)
+ * @returns {{ desconto:number, total:number, percent:number, error?:string }} em euros
+ */
+export function saleDiscount(subtotal, mode, rawValue) {
+  const sub = toCents(subtotal)
+  const v = parseDecimal(rawValue)
+  const none = { desconto: 0, total: fromCents(sub), percent: 0 }
+  if (v == null || sub <= 0) return none
+  let d
+  if (mode === 'percent') {
+    if (v < 0 || v > 100) return { ...none, error: 'A percentagem tem de estar entre 0 e 100.' }
+    d = Math.round((sub * v) / 100)
+  } else if (mode === 'total') {
+    const t = toCents(v)
+    if (t < 0) return { ...none, error: 'O novo valor não pode ser negativo.' }
+    if (t > sub) return { ...none, error: 'O novo valor é maior que o subtotal.' }
+    d = sub - t
+  } else {
+    d = toCents(v)
+    if (d < 0) return { ...none, error: 'O desconto não pode ser negativo.' }
+    if (d > sub) return { ...none, error: 'O desconto é maior que o subtotal.' }
+  }
+  return { desconto: fromCents(d), total: fromCents(sub - d), percent: Math.round((d / sub) * 1000) / 10 }
+}
+
+/**
+ * Reparte um desconto (em €) pelas linhas, proporcional ao valor de cada uma,
+ * de forma a que a soma bata certo ao cêntimo. Devolve a parte de cada linha em €.
+ */
+export function allocateDiscount(lineTotals, desconto) {
+  const cents = lineTotals.map(toCents)
+  const sum = cents.reduce((a, b) => a + b, 0)
+  const d = Math.min(toCents(desconto), sum)
+  if (!d || !sum) return cents.map(() => 0)
+  const raw = cents.map((c) => (c * d) / sum)
+  const parts = raw.map(Math.floor)
+  let rest = d - parts.reduce((a, b) => a + b, 0)
+  raw.map((r, i) => [r - Math.floor(r), i]).sort((a, b) => b[0] - a[0])
+    .forEach(([, i]) => { if (rest > 0 && parts[i] < cents[i]) { parts[i]++; rest-- } })
+  return parts.map(fromCents)
+}

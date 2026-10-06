@@ -4,6 +4,8 @@ import { listProducts, saveProduct, deleteProduct, importProducts } from '../db/
 import { parseProductsCsv, parseMoney, toCsv, ptNumber, downloadFile } from '../lib/csv.js'
 import { PROMO_PRESETS, parsePromo, promoLabel, priceLine, formatEuro } from '../lib/pricing.js'
 import { useToast } from '../components/Toast.jsx'
+import CategoryFilter from '../components/CategoryFilter.jsx'
+import { parseCategorias, matchesCategorias, countCategorias } from '../lib/categorias.js'
 
 const today = () => new Date().toLocaleDateString('sv-SE') // YYYY-MM-DD local
 
@@ -13,14 +15,15 @@ export default function Produtos() {
   const [editing, setEditing] = useState(null)
   const [mode, setMode] = useState('replace')
   const [filter, setFilter] = useState('')
+  const [cats, setCats] = useState([])
   const [report, setReport] = useState(null) // resultado da última importação
   const [onlyNoPrice, setOnlyNoPrice] = useState(false)
 
   const shown = useMemo(() => {
     const q = filter.trim().toLowerCase()
-    const base = onlyNoPrice ? products.filter((p) => !(p.valor > 0)) : products
+    const base = products.filter((p) => matchesCategorias(p, cats) && (!onlyNoPrice || !(p.valor > 0)))
     return q ? base.filter((p) => `${p.nome} ${p.tamanho}`.toLowerCase().includes(q)) : base
-  }, [products, filter, onlyNoPrice])
+  }, [products, filter, onlyNoPrice, cats])
   const noPrice = products.filter((p) => !(p.valor > 0)).length
 
   async function onFile(e) {
@@ -48,6 +51,7 @@ export default function Produtos() {
       { header: 'VALOR', value: (p) => ptNumber(p.valor) },
       { header: 'PROMOCAO', value: 'promocao' },
       { header: 'PRECO ESPECIAL', value: (p) => ptNumber(p.preco_especial) },
+      { header: 'CATEGORIA', value: (p) => parseCategorias(p.categorias).join(', ') },
     ], '\t')
     downloadFile(`stock-${today()}.csv`, csv)
   }
@@ -105,10 +109,11 @@ export default function Produtos() {
             </button>
           </div>
         </div>
+        <CategoryFilter products={products} selected={cats} onChange={setCats} />
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Nome</th><th>Tamanho</th><th className="num">Qtd</th><th className="num">Valor</th><th>Promoção</th><th></th></tr>
+              <tr><th>Nome</th><th>Tamanho</th><th className="num">Qtd</th><th className="num">Valor</th><th>Categorias</th><th>Promoção</th><th></th></tr>
             </thead>
             <tbody>
               {shown.map((p) => (
@@ -117,6 +122,7 @@ export default function Produtos() {
                   <td>{p.tamanho}</td>
                   <td className="num">{p.qtd}</td>
                   <td className="num">{p.valor > 0 ? formatEuro(p.valor) : <span className="badge warn">Sem preço</span>}</td>
+                  <td>{parseCategorias(p.categorias).map((c) => <span key={c} className="cat-tag">{c}</span>)}</td>
                   <td>{promoLabel(p) && <span className="badge">{promoLabel(p)}</span>}</td>
                   <td className="actions"><button onClick={() => setEditing({ ...p })}>Editar</button></td>
                 </tr>
@@ -126,7 +132,7 @@ export default function Produtos() {
         </div>
       </section>
 
-      {editing && <ProductForm initial={editing} onClose={() => setEditing(null)} />}
+      {editing && <ProductForm initial={editing} allCats={countCategorias(products).map(([c]) => c)} onClose={() => setEditing(null)} />}
     </div>
   )
 }
@@ -138,13 +144,14 @@ function presetFor(code) {
   return p?.type === 'PACK' ? 'PACK_N' : p?.type === 'LEVE' ? 'LEVE_N_PAGUE_M' : ''
 }
 
-function ProductForm({ initial, onClose }) {
+function ProductForm({ initial, allCats = [], onClose }) {
   const toast = useToast()
   const parsed = parsePromo(initial.promocao)
   const [f, setF] = useState({
     ...initial,
     valor: initial.valor === '' ? '' : String(initial.valor).replace('.', ','),
     preco_especial: initial.preco_especial == null ? '' : String(initial.preco_especial).replace('.', ','),
+    categorias: parseCategorias(initial.categorias).join(', '),
   })
   const [preset, setPreset] = useState(presetFor(initial.promocao))
   const [leve, setLeve] = useState(parsed?.type === 'LEVE' ? parsed.leve : 3)
@@ -187,6 +194,16 @@ function ProductForm({ initial, onClose }) {
           <label>Preço especial (€) <span className="muted">opcional</span>
             <input inputMode="decimal" value={f.preco_especial} onChange={set('preco_especial')} placeholder="—" />
           </label>
+          <label className="span2">Categorias <span className="muted">separadas por vírgula</span>
+            <input value={f.categorias} onChange={set('categorias')} placeholder="ex.: CAMISETA, OLGA" />
+          </label>
+          {allCats.length > 0 && (
+            <div className="span2 cat-quick">
+              {allCats.filter((c) => !parseCategorias(f.categorias).includes(c)).map((c) => (
+                <button key={c} type="button" className="cat-chip" onClick={() => setF({ ...f, categorias: [...parseCategorias(f.categorias), c].join(', ') })}>+ {c}</button>
+              ))}
+            </div>
+          )}
           <label className="span2">Promoção
             <select value={preset} onChange={(e) => setPreset(e.target.value)}>
               {PROMO_PRESETS.map((p) => <option key={p.code} value={p.code}>{p.label}</option>)}

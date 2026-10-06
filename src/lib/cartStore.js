@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from 'react'
 
 const KEY = 'loja.carrinho'
-const EMPTY = { items: {}, nome: '', nucleo: '', observacao: '' } // items: productId -> quantidade
+const EMPTY = { items: {}, nome: '', nucleo: '', observacao: '', descontoMode: 'valor', descontoValue: '' } // items: productId -> quantidade
 
 function load() {
   try {
@@ -38,9 +38,12 @@ export const cart = {
   setNome: (nome) => setState({ nome }),
   setNucleo: (nucleo) => setState({ nucleo }),
   setObservacao: (observacao) => setState({ observacao }),
-  clearItems: () => setState({ items: {}, observacao: '' }),
+  /** desconto dado no carrinho: mode 'valor' | 'percent' | 'total' */
+  setDesconto: (descontoMode, descontoValue) => setState({ descontoMode, descontoValue }),
+  clearDesconto: () => setState({ descontoValue: '' }),
+  clearItems: () => setState({ items: {}, observacao: '', descontoValue: '' }),
   /** depois de uma venda: limpa artigos e comprador, mantém o núcleo */
-  afterSale: () => setState({ items: {}, nome: '', observacao: '' }),
+  afterSale: () => setState({ items: {}, nome: '', observacao: '', descontoValue: '' }),
 }
 
 export function useCart() {

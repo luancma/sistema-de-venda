@@ -22,6 +22,8 @@ const EXPORT_COLUMNS = [
   { header: 'QTD', value: 'quantidade' },
   { header: 'PRECO UNITARIO', value: (t) => ptNumber(t.preco_unitario) },
   { header: 'DESCONTO', value: (t) => ptNumber(t.desconto) },
+  { header: 'DESCONTO VENDA', value: (t) => ptNumber(t.desconto_venda) },
+  { header: 'TIPO DESCONTO', value: 'desconto_info' },
   { header: 'PRECO', value: (t) => ptNumber(t.preco) },
   { header: 'PROMOCAO', value: 'promocao' },
   { header: 'NOME', value: 'nome' },
@@ -43,6 +45,8 @@ export default function Vendas() {
       const s = map.get(t.venda_id)
       s.lines.push(t)
       s.total += t.preco
+      s.descontoVenda = (s.descontoVenda || 0) + (t.desconto_venda || 0)
+      s.descontoInfo = t.desconto_info || s.descontoInfo
     }
     return [...map.values()]
   }, [rows])
@@ -50,7 +54,7 @@ export default function Vendas() {
   const summary = useMemo(() => {
     const total = rows.reduce((s, t) => s + t.preco, 0)
     const itens = rows.reduce((s, t) => s + t.quantidade, 0)
-    const desconto = rows.reduce((s, t) => s + t.desconto, 0)
+    const desconto = rows.reduce((s, t) => s + t.desconto + (t.desconto_venda || 0), 0)
     const porNucleo = {}
     for (const t of rows) porNucleo[t.nucleo || '—'] = (porNucleo[t.nucleo || '—'] || 0) + t.preco
     return { total, itens, desconto, porNucleo: Object.entries(porNucleo).sort((a, b) => b[1] - a[1]) }
@@ -100,6 +104,7 @@ export default function Vendas() {
               <span>{s.nome || <span className="muted">sem nome</span>}</span>
               <span className="chip">{s.nucleo}</span>
               <span className="muted">por {s.vendedor}</span>
+              {s.descontoVenda > 0 && <span className="badge">desconto {s.descontoInfo} −{formatEuro(s.descontoVenda)}</span>}
               <strong className="grow num">{formatEuro(s.total)}</strong>
               <button className="danger small" onClick={() => cancel(s)}>Anular</button>
             </div>

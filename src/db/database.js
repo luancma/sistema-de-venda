@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS products (
   tamanho        TEXT NOT NULL DEFAULT '',
   valor          REAL NOT NULL DEFAULT 0,
   promocao       TEXT,
-  preco_especial REAL
+  preco_especial REAL,
+  categorias     TEXT              -- ex.: "CAMISETA,OLGA"
 );
 CREATE INDEX IF NOT EXISTS idx_products_nome ON products(nome, tamanho);
 
@@ -34,7 +35,9 @@ CREATE TABLE IF NOT EXISTS transactions (
   nome            TEXT NOT NULL DEFAULT '', -- nome do comprador
   nucleo          TEXT NOT NULL DEFAULT '',
   vendedor        TEXT NOT NULL DEFAULT '', -- quem vendeu
-  observacao      TEXT NOT NULL DEFAULT ''  -- obrigatória ao vender sem stock
+  observacao      TEXT NOT NULL DEFAULT '', -- obrigatória ao vender sem stock
+  desconto_venda  REAL NOT NULL DEFAULT 0,  -- parte desta linha do desconto dado no carrinho
+  desconto_info   TEXT NOT NULL DEFAULT ''  -- como foi dado: "10%", "-5,00 €", "total 40,00 €"
 );
 CREATE INDEX IF NOT EXISTS idx_tx_data ON transactions(data);
 CREATE INDEX IF NOT EXISTS idx_tx_venda ON transactions(venda_id);
@@ -46,9 +49,17 @@ CREATE TABLE IF NOT EXISTS nucleos (
 
 /** Atualiza bases de dados criadas por versões anteriores da app. */
 function migrate(database) {
+  const pcols = database.exec('PRAGMA table_info(products)')[0]?.values.map((r) => r[1]) ?? []
+  if (!pcols.includes('categorias')) database.exec('ALTER TABLE products ADD COLUMN categorias TEXT')
   const cols = database.exec('PRAGMA table_info(transactions)')[0]?.values.map((r) => r[1]) ?? []
   if (!cols.includes('observacao')) {
     database.exec("ALTER TABLE transactions ADD COLUMN observacao TEXT NOT NULL DEFAULT ''")
+  }
+  if (!cols.includes('desconto_venda')) {
+    database.exec('ALTER TABLE transactions ADD COLUMN desconto_venda REAL NOT NULL DEFAULT 0')
+  }
+  if (!cols.includes('desconto_info')) {
+    database.exec("ALTER TABLE transactions ADD COLUMN desconto_info TEXT NOT NULL DEFAULT ''")
   }
 }
 

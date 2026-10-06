@@ -1,5 +1,6 @@
 import Papa from 'papaparse'
 import { normalizePromo } from './pricing.js'
+import { parseCategorias } from './categorias.js'
 
 // Normaliza cabeçalhos: "Preço Especial" -> "PRECO_ESPECIAL"
 const normHeader = (h) =>
@@ -22,6 +23,8 @@ const HEADER_ALIASES = {
   PRECO: 'valor',
   PROMOCAO: 'promocao',
   PRECO_ESPECIAL: 'preco_especial',
+  CATEGORIA: 'categorias',
+  CATEGORIAS: 'categorias',
 }
 
 /** Converte "12,50 €", "1.234,50", "12.5" em número. Devolve null se vazio/ inválido. */
@@ -100,10 +103,12 @@ export function parseProductsCsv(text) {
     products.push({
       nome,
       qtd: parseInteger(row.qtd),
-      tamanho: String(row.tamanho ?? '').trim(),
+      // "DEFAULT" na folha = sem tamanho
+      tamanho: /^default$/i.test(String(row.tamanho ?? '').trim()) ? '' : String(row.tamanho ?? '').trim(),
       valor,
       promocao: promo?.promocao ?? null,
       preco_especial,
+      categorias: parseCategorias(row.categorias),
     })
   })
   return { products, errors, warnings }

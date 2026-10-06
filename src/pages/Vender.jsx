@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '../db/useDb.js'
 import { listProducts, listNucleos, registerSale } from '../db/repo.js'
-import { priceLine, promoLabel, formatEuro } from '../lib/pricing.js'
+import DiscountBox from '../components/DiscountBox.jsx'
+import { priceLine, promoLabel, formatEuro, saleDiscount } from '../lib/pricing.js'
 import { useToast } from '../components/Toast.jsx'
 import { cart as cartActions, useCart } from '../lib/cartStore.js'
 import NucleosModal from '../components/NucleosModal.jsx'
 import ConfirmModal from '../components/ConfirmModal.jsx'
 import QtyInput from '../components/QtyInput.jsx'
+import CategoryFilter from '../components/CategoryFilter.jsx'
+import { matchesCategorias } from '../lib/categorias.js'
 
 const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
@@ -15,8 +18,9 @@ export default function Vender({ vendedor, goTo }) {
   const products = useQuery(listProducts)
   const nucleos = useQuery(listNucleos)
   const [search, setSearch] = useState('')
+  const [cats, setCats] = useState([]) // categorias selecionadas no filtro
   // o carrinho vive fora da página: não se perde ao mudar de separador
-  const { items: cart, nome, nucleo, observacao } = useCart()
+  const { items: cart, nome, nucleo, observacao, descontoMode, descontoValue } = useCart()
   const { setNome, setNucleo, setObservacao } = cartActions
   const [busy, setBusy] = useState(false)
   const [nucleosOpen, setNucleosOpen] = useState(false)
@@ -25,15 +29,16 @@ export default function Vender({ vendedor, goTo }) {
   const byId = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products])
   const filtered = useMemo(() => {
     const q = norm(search.trim())
-    return q ? products.filter((p) => norm(`${p.nome} ${p.tamanho}`).includes(q)) : products
-  }, [products, search])
+    return products.filter((p) => matchesCategorias(p, cats) && (!q || norm(`${p.nome} ${p.tamanho}`).includes(q)))
+  }, [products, search, cats])
 
   const lines = Object.entries(cart)
     .filter(([id]) => byId[id])
     .map(([id, q]) => ({ product: byId[id], quantidade: q, ...priceLine(byId[id], q) }))
   const total = lines.reduce((s, l) => s + l.total, 0)
   const semStock = lines.filter((l) => l.quantidade > l.product.qtd)
-  const desconto = lines.reduce((s, l) => s + l.desconto, 0)
+  const desconto = lines.reduce((s, l) => s + l.desconto, 0) // promoções dos produtos
+  const venda = saleDiscount(total, descontoMode, descontoValue) // desconto dado no carrinho
 
   const setQty = cartActions.setQty
   const add = (p) => {
@@ -45,6 +50,7 @@ export default function Vender({ vendedor, goTo }) {
   async function finalizar() {
     if (!vendedor.trim()) return toast('Indica quem está a vender (campo "Vendedor" no topo).', 'error')
     if (!nucleo) return toast('Escolhe o núcleo do comprador.', 'error')
+    if (venda.error) return toast(`Desconto: ${venda.error}`, 'error')
     const semPreco = lines.filter((l) => !(l.product.valor > 0))
     if (semPreco.length && !window.confirm(
       `Sem preço definido: ${semPreco.map((l) => l.product.nome).join(', ')}.\nVender a 0 € mesmo assim?`)) return
@@ -57,7 +63,10 @@ export default function Vender({ vendedor, goTo }) {
     }
     setBusy(true)
     try {
-      const r = await registerSale({ items, nome, nucleo, vendedor, observacao, allowNegative })
+      const r = await registerSale({
+        items, nome, nucleo, vendedor, observacao, allowNegative,
+        desconto: venda.desconto > 0 ? { mode: descontoMode, value: descontoValue } : null,
+      })
       toast(`Venda registada: ${formatEuro(r.total)}`)
       cartActions.afterSale()
     } catch (e) {
@@ -86,11 +95,12 @@ export default function Vender({ vendedor, goTo }) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+        <CategoryFilter products={products} selected={cats} onChange={setCats} />
         <div className="grid">
           {filtered.map((p) => {
             const promo = promoLabel(p)
             return (
-              <button key={p.id} className={`card ${p.qtd <= 0 ? 'out' : ''}`} onClick={() => add(p)}>
+              <button key={p.id} className={`card ${p.qtd <= 0 ? 'out' : ''} ${cart[p.id] ? 'in-cart' : ''}`} onClick={() => add(p)}>
                 <span className="card-name">{p.nome}</span>
                 {p.tamanho && <span className="card-size">{p.tamanho}</span>}
                 <span className="card-price">{p.valor > 0 ? formatEuro(p.valor) : <span className="badge warn">Sem preço</span>}</span>
@@ -107,7 +117,7 @@ export default function Vender({ vendedor, goTo }) {
       {lines.length > 0 && (
         <button className="mobile-cart-bar" onClick={() => document.getElementById('carrinho')?.scrollIntoView({ behavior: 'smooth' })}>
           <span>Carrinho · {lines.reduce((n, l) => n + l.quantidade, 0)} artigo(s)</span>
-          <strong>{formatEuro(total)} ↓</strong>
+          <strong>{formatEuro(venda.desconto > 0 ? venda.total : total)} ↓</strong>
         </button>
       )}
 
@@ -185,9 +195,24 @@ export default function Vender({ vendedor, goTo }) {
           </div>
         </div>
 
+        <DiscountBox
+          mode={descontoMode}
+          value={descontoValue}
+          subtotal={total}
+          result={venda}
+          onChange={cartActions.setDesconto}
+          onClear={cartActions.clearDesconto}
+        />
+
         <div className="totals">
-          {desconto > 0 && <div className="muted">Desconto: −{formatEuro(desconto)}</div>}
-          <div className="total">Total <span>{formatEuro(total)}</span></div>
+          {desconto > 0 && <div className="muted">Promoções: −{formatEuro(desconto)}</div>}
+          {venda.desconto > 0 && (
+            <>
+              <div className="muted">Subtotal: {formatEuro(total)}</div>
+              <div className="discount-line">Desconto: −{formatEuro(venda.desconto)}</div>
+            </>
+          )}
+          <div className="total">Total <span>{formatEuro(venda.desconto > 0 ? venda.total : total)}</span></div>
         </div>
         <div className="row">
           <button onClick={() => setConfirm({ all: true })} disabled={!lines.length || busy}>Limpar</button>
