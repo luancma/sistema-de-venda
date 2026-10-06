@@ -1,0 +1,13 @@
+LOJA — vendas offline
+=====================
+
+1. Extrai o zip para uma pasta no computador (não abras o ficheiro de dentro do zip).
+2. Abre "loja.html" com duplo clique (Chrome, Edge ou Firefox recomendados).
+3. Não precisa de internet nem de instalar nada.
+
+IMPORTANTE
+- Os dados ficam guardados no browser deste computador. Abrir o loja.html noutro
+  computador ou noutro browser começa com uma base de dados vazia.
+- No fim do dia: "Vendas do dia" -> "Exportar CSV".
+- Faz backup regularmente: "Configurações" -> "Descarregar backup (.sqlite)".
+- Para começar: "Produtos" -> "Escolher ficheiro CSV" (ver produtos-exemplo.csv).

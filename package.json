@@ -1,0 +1,27 @@
+{
+  "name": "loja",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:single": "vite build --mode single && node scripts/package-single.mjs",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "build:web": "vite build && cd dist && rm -f ../loja-web.zip && zip -q -r ../loja-web.zip . && echo \"\u2713 loja-web.zip criado\""
+  },
+  "dependencies": {
+    "papaparse": "^5.5.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "sql.js": "^1.13.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.1.0",
+    "vite": "^7.2.0",
+    "vite-plugin-pwa": "^1.3.0",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^3.2.4"
+  }
+}
