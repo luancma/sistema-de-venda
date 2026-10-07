@@ -66,3 +66,11 @@ describe('coluna SEM LIMITE', () => {
     expect(sem.products[0].sem_limite).toBeUndefined()
   })
 })
+
+describe('coluna CAIXA DE DESTINO', () => {
+  it('lê a caixa de cada produto, e sem coluna fica undefined', () => {
+    const com = parseProductsCsv('NOME\tQTD\tTAMANHO\tVALOR\tCATEGORIA\tCAIXA DE DESTINO\nT-shirt\t2\tM\t10\tCAMISETA\t Caixa 3 \nCaneca\t1\t\t5\t\t')
+    expect(com.products.map((p) => p.caixa_destino)).toEqual(['Caixa 3', ''])
+    expect(parseProductsCsv('NOME;QTD;VALOR\nRifa;;1').products[0].caixa_destino).toBeUndefined()
+  })
+})

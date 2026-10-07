@@ -16,6 +16,7 @@ export interface ProductInput {
   preco_especial?: number | string | null
   categorias?: string | string[] | null
   sem_limite?: boolean
+  caixa_destino?: string
 }
 
 export interface SaleInput {
@@ -55,6 +56,7 @@ const productFields = (p: ProductInput) => ({
   preco_especial: nullable(p.preco_especial),
   categorias: cats(p.categorias),
   sem_limite: Boolean(p.sem_limite),
+  caixa_destino: (p.caixa_destino || '').trim(),
 })
 
 function insertProduct(p: ProductInput): string {
@@ -74,6 +76,49 @@ export const saveProduct = (p: ProductInput) =>
 export const deleteProduct = (id: string) =>
   write((s) => {
     s.products = s.products.filter((p) => p.id !== id)
+  })
+
+/** Alterações em lote: só os campos definidos mudam; categorias juntam-se/tiram-se às de cada produto. */
+export interface ProductBatch {
+  qtd?: number
+  valor?: number
+  caixa_destino?: string
+  promocao?: string | null
+  sem_limite?: boolean
+  addCategorias?: string[]
+  removeCategorias?: string[]
+}
+
+/** Aplica as mesmas alterações a vários produtos. @returns nº de produtos alterados */
+export const updateProducts = (ids: string[], ch: ProductBatch) =>
+  write((s) => {
+    const sel = new Set(ids)
+    let n = 0
+    for (const p of s.products) {
+      if (!sel.has(p.id)) continue
+      const remove = new Set(ch.removeCategorias ?? [])
+      const categorias = [...parseCategorias(p.categorias).filter((c) => !remove.has(c)), ...(ch.addCategorias ?? [])]
+      Object.assign(p, normalizeProduct({
+        ...p,
+        qtd: ch.qtd ?? p.qtd,
+        valor: ch.valor ?? p.valor,
+        caixa_destino: ch.caixa_destino ?? p.caixa_destino,
+        promocao: ch.promocao !== undefined ? ch.promocao : p.promocao,
+        sem_limite: ch.sem_limite ?? p.sem_limite,
+        categorias: cats(categorias),
+      }))
+      n++
+    }
+    return n
+  })
+
+/** Apaga vários produtos (as vendas já feitas não são afetadas). @returns nº de produtos apagados */
+export const deleteProducts = (ids: string[]) =>
+  write((s) => {
+    const sel = new Set(ids)
+    const before = s.products.length
+    s.products = s.products.filter((p) => !sel.has(p.id))
+    return before - s.products.length
   })
 
 /**
@@ -101,6 +146,7 @@ export const importProducts = (products: ProductInput[], mode: 'replace' | 'merg
           preco_especial: p.preco_especial ?? existing.preco_especial,
           categorias: c ?? existing.categorias,
           sem_limite: p.sem_limite ?? existing.sem_limite, // só muda se o CSV tiver a coluna
+          caixa_destino: p.caixa_destino ?? existing.caixa_destino, // idem
         }))
         updated++
       } else {
@@ -198,6 +244,7 @@ export const registerSale = ({ items, nome, nucleo, responsavel, atividade = '',
         promocao: p.promocao || (p.preco_especial != null ? 'PRECO_ESPECIAL' : null),
         nome: (nome || '').trim(), nucleo: nucleo || '', responsavel: (responsavel || '').trim(),
         observacao: observacao.trim(), desconto_venda: shares[i], desconto_info: info, atividade: (atividade || '').trim(),
+        caixa_destino: p.caixa_destino,
       }))
       if (!stockIlimitado(p)) p.qtd -= quantidade
       total += preco

@@ -72,7 +72,9 @@ T-shirt Logo	20	M	12,50
 ```
 
 - Separador tab, `;` ou `,` (detetado automaticamente). Valores aceitam `12,50`, `12.50`, `12,50 €`.
-- Colunas opcionais: `PROMOCAO`, `PRECO ESPECIAL`.
+- Colunas opcionais: `PROMOCAO`, `PRECO ESPECIAL`, `CATEGORIA`, `CAIXA DE DESTINO`.
+- **Caixa de destino**: a coluna `CAIXA DE DESTINO` fica guardada no produto (editável em **Produtos → Editar**) e é copiada
+  para cada item vendido, aparecendo na exportação das vendas (coluna `CAIXA DE DESTINO`).
 - **Stock ilimitado** (ex.: rifas, cafés): por defeito todos os produtos têm stock controlado. Em **Produtos → Editar**,
   o interruptor **Sem limite** faz com que a quantidade deixe de ser controlada: não é descontada nas vendas e o produto
   nunca fica "sem stock" (aparece como ∞). No CSV, a coluna opcional `SEM LIMITE` (`SIM`/`X`) faz o mesmo; a exportação

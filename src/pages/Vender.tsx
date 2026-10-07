@@ -12,7 +12,7 @@ import StockValue from '../components/StockValue.tsx'
 import NucleosModal from '../components/NucleosModal.tsx'
 import ConfirmModal from '../components/ConfirmModal.tsx'
 import QtyInput from '../components/QtyInput.tsx'
-import CategoryFilter, { CategoryFilterButton } from '../components/CategoryFilter.tsx'
+import CategoryFilter from '../components/CategoryFilter.tsx'
 import { matchesCategorias } from '../lib/categorias.ts'
 import TrashIcon from '../components/TrashIcon.tsx'
 import { errorMessage } from '../lib/errors.ts'
@@ -39,7 +39,8 @@ export default function Vender({ goTo }: PageProps) {
   } = useCart()
   const [busy, setBusy] = useState(false)
   const [nucleosOpen, setNucleosOpen] = useState(false)
-  // computador: carrinho num painel lateral (drawer) que abre/fecha; no telemóvel não tem efeito
+  // ecrãs médios (861–1023px): carrinho num painel lateral (drawer) que abre/fecha;
+  // no computador largo fica sempre aberto e no telemóvel não tem efeito
   const [drawerOpen, setDrawerOpen] = useState(() => { try { return localStorage.getItem('loja.cartDrawer') === '1' } catch { return false } })
   useEffect(() => { try { localStorage.setItem('loja.cartDrawer', drawerOpen ? '1' : '0') } catch { /* ignora */ } }, [drawerOpen])
   useEffect(() => {
@@ -69,7 +70,6 @@ export default function Vender({ goTo }: PageProps) {
     const q = (cart[p.id] || 0) + 1
     if (faltaStock(p, q)) toast(`Atenção: só há ${p.qtd} em stock de ${p.nome} ${p.tamanho}`, 'warn')
     setQty(p.id, q)
-    setDrawerOpen(true) // no computador abre o carrinho (no telemóvel não tem efeito)
   }
 
   async function finalizar() {
@@ -127,9 +127,8 @@ export default function Vender({ goTo }: PageProps) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <CategoryFilterButton products={products} selected={cats} onChange={setCats} />
+          <CategoryFilter products={products} selected={cats} onChange={setCats} />
         </div>
-        <CategoryFilter products={products} selected={cats} onChange={setCats} />
         <div className="grid">
           {filtered.map((p) => {
             const promo = promoLabel(p)
@@ -155,7 +154,10 @@ export default function Vender({ goTo }: PageProps) {
         </button>
       )}
 
-      {/* botão do drawer (só aparece no computador) */}
+      {/* ecrãs médios: com o carrinho aberto o catálogo fica escurecido; tocar aí fecha o carrinho */}
+      <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
+
+      {/* botão do drawer (só aparece em ecrãs médios) */}
       <button type="button" className="cart-toggle" onClick={() => setDrawerOpen(true)} aria-expanded={drawerOpen} aria-controls="carrinho">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 8H6.2" /><circle cx="9" cy="20" r="1.4" /><circle cx="17" cy="20" r="1.4" />

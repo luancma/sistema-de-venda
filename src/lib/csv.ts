@@ -13,6 +13,8 @@ export interface ImportedProduct {
   categorias: string[]
   /** undefined = o CSV não tem a coluna SEM LIMITE */
   sem_limite?: boolean
+  /** undefined = o CSV não tem a coluna CAIXA DE DESTINO */
+  caixa_destino?: string
 }
 
 /** Coluna do CSV exportado: campo do objeto ou função que calcula o valor. */
@@ -46,6 +48,9 @@ const HEADER_ALIASES: Record<string, string> = {
   CATEGORIAS: 'categorias',
   SEM_LIMITE: 'sem_limite',
   ILIMITADO: 'sem_limite',
+  CAIXA_DE_DESTINO: 'caixa_destino',
+  CAIXA_DESTINO: 'caixa_destino',
+  CAIXA: 'caixa_destino',
 }
 
 /** "SIM", "S", "X", "1", "TRUE" -> true; vazio/outros -> false; coluna inexistente -> undefined */
@@ -77,7 +82,7 @@ export function parseInteger(raw: unknown): number {
 }
 
 /**
- * Lê o CSV de inicialização (NOME, QTD, TAMANHO, VALOR [, PROMOCAO, PRECO ESPECIAL]).
+ * Lê o CSV de inicialização (NOME, QTD, TAMANHO, VALOR [, PROMOCAO, PRECO ESPECIAL, CATEGORIA, CAIXA DE DESTINO]).
  * O separador (tab, ; ou ,) é detetado automaticamente.
  * `errors`: linhas ignoradas; `warnings`: linhas importadas, mas com algo a rever.
  */
@@ -134,6 +139,7 @@ export function parseProductsCsv(text: string): { products: ImportedProduct[]; e
       preco_especial,
       categorias: parseCategorias(row.categorias),
       sem_limite: fields.includes('sem_limite') ? parseSimNao(row.sem_limite) : undefined,
+      caixa_destino: fields.includes('caixa_destino') ? String(row.caixa_destino ?? '').trim() : undefined,
     })
   })
   return { products, errors, warnings }

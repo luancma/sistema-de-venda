@@ -13,6 +13,8 @@ export interface Product {
   categorias: string | null
   /** stock ilimitado: não é controlado nem descontado */
   sem_limite: boolean
+  /** caixa onde o produto está guardado (coluna CAIXA DE DESTINO do CSV) */
+  caixa_destino: string
 }
 
 /** Uma linha de uma venda (um produto); `venda_id` agrupa o carrinho. */
@@ -42,6 +44,8 @@ export interface Transaction {
   /** ex.: "10%", "-5,00 €", "novo total 40,00 €" */
   desconto_info: string
   atividade: string
+  /** caixa de destino do produto no momento da venda */
+  caixa_destino: string
 }
 
 /** Uma venda (carrinho) com as suas linhas, como aparece em Vendas e no recibo. */

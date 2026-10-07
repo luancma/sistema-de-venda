@@ -37,6 +37,7 @@ export const normalizeProduct = (p: Loose<Product>): Product => ({
   preco_especial: numOrNull(p.preco_especial),
   categorias: strOrNull(p.categorias), // ex.: "CAMISETA,OLGA"
   sem_limite: Boolean(p.sem_limite), // stock ilimitado: não é controlado nem descontado
+  caixa_destino: str(p.caixa_destino).trim(),
 })
 
 export const normalizeTransaction = (t: Loose<Transaction>): Transaction => ({
@@ -58,6 +59,7 @@ export const normalizeTransaction = (t: Loose<Transaction>): Transaction => ({
   desconto_venda: num(t.desconto_venda), // parte desta linha do desconto dado no carrinho
   desconto_info: str(t.desconto_info), // como foi dado: "10%", "-5,00 €", "total 40,00 €"
   atividade: str(t.atividade), // atividade/evento em que a venda foi feita
+  caixa_destino: str(t.caixa_destino), // caixa de destino do produto
 })
 
 /** Valida e completa dados vindos do IndexedDB ou de um backup. */

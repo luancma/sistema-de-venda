@@ -12,17 +12,18 @@ import type { Sale, Transaction } from '../types.ts'
 const today = () => new Date().toLocaleDateString('sv-SE') // YYYY-MM-DD local
 const fmtDateTime = (iso: string) => new Date(iso).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' })
 const pad = (n: number) => String(n).padStart(2, '0')
-// formato estável para folhas de cálculo: 2026-10-06 15:56
-const exportDate = (iso: string) => { const d = new Date(iso); return `${d.toLocaleDateString('sv-SE')} ${pad(d.getHours())}:${pad(d.getMinutes())}` }
+// formato estável para folhas de cálculo, em colunas separadas (curtas, o Excel não as esconde com ####): 2026-10-06 | 15:56
+const exportDate = (iso: string) => new Date(iso).toLocaleDateString('sv-SE')
+const exportTime = (iso: string) => { const d = new Date(iso); return `${pad(d.getHours())}:${pad(d.getMinutes())}` }
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })
 
 // Colunas do CSV exportado (contrato de transação + campos de contexto)
 const EXPORT_COLUMNS: CsvColumn<Transaction>[] = [
-  { header: 'ID', value: 'id' },
-  { header: 'VENDA', value: 'venda_id' },
   { header: 'DATA', value: (t) => exportDate(t.data) },
+  { header: 'HORA', value: (t) => exportTime(t.data) },
   { header: 'NOME DO PRODUTO', value: 'nome_produto' },
   { header: 'TAMANHO', value: 'tamanho' },
+  { header: 'CAIXA DE DESTINO', value: 'caixa_destino' },
   { header: 'QTD', value: 'quantidade' },
   { header: 'PRECO UNITARIO', value: (t) => ptNumber(t.preco_unitario) },
   { header: 'DESCONTO', value: (t) => ptNumber(t.desconto) },
@@ -35,6 +36,8 @@ const EXPORT_COLUMNS: CsvColumn<Transaction>[] = [
   { header: 'ATIVIDADE', value: 'atividade' },
   { header: 'RESPONSAVEL', value: 'responsavel' },
   { header: 'OBSERVACAO', value: 'observacao' },
+  { header: 'VENDA', value: 'venda_id' },
+  { header: 'ID', value: 'id' },
 ]
 
 export default function Vendas() {

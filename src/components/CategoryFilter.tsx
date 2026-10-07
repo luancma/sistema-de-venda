@@ -9,32 +9,11 @@ interface Props {
 }
 
 /**
- * Filtro por categorias (botões que ligam/desligam) — no computador.
- * Com várias selecionadas mostra os produtos que têm TODAS — ex.: CAMISETA + OLGA.
+ * Filtro por categorias: um botão "Filtros (n)" que abre uma janela com as categorias para marcar.
+ * As escolhas aplicam-se logo (os produtos por trás já ficam filtrados).
+ * Com várias marcadas mostra os produtos que têm TODAS — ex.: CAMISETA + OLGA.
  */
 export default function CategoryFilter({ products, selected, onChange }: Props) {
-  const all = countCategorias(products)
-  if (!all.length) return null
-  const toggle = (c: string) => onChange(selected.includes(c) ? selected.filter((x) => x !== c) : [...selected, c])
-  return (
-    <div className="cat-filter only-desktop" role="group" aria-label="Filtrar por categoria">
-      <button type="button" className={`cat-chip ${selected.length ? '' : 'on'}`} aria-pressed={!selected.length} onClick={() => onChange([])}>
-        Todas
-      </button>
-      {all.map(([c, n]) => (
-        <button key={c} type="button" className={`cat-chip ${selected.includes(c) ? 'on' : ''}`} aria-pressed={selected.includes(c)} onClick={() => toggle(c)}>
-          {c} <span className="cat-n">{n}</span>
-        </button>
-      ))}
-    </div>
-  )
-}
-
-/**
- * O mesmo filtro no telemóvel: um botão "Filtros (n)" que abre uma janela com as categorias para marcar.
- * As escolhas aplicam-se logo (os produtos por trás já ficam filtrados).
- */
-export function CategoryFilterButton({ products, selected, onChange }: Props) {
   const [open, setOpen] = useState(false)
   const all = countCategorias(products)
   const closeRef = useRef<HTMLButtonElement>(null)
@@ -52,7 +31,7 @@ export function CategoryFilterButton({ products, selected, onChange }: Props) {
 
   return (
     <>
-      <button type="button" className={`filter-btn only-mobile ${selected.length ? 'on' : ''}`} onClick={() => setOpen(true)}
+      <button type="button" className={`filter-btn ${selected.length ? 'on' : ''}`} onClick={() => setOpen(true)}
         aria-haspopup="dialog" aria-label={`Filtros${selected.length ? `: ${selected.join(', ')}` : ''}`}>
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 5h18l-7 8v6l-4-2v-4z" /></svg>
         Filtros{selected.length > 0 && ` (${selected.length})`}

@@ -3,7 +3,7 @@ import { openDatabase, replaceDatabase, exportDatabase } from '../src/db/databas
 import {
   listProducts, saveProduct, deleteProduct, importProducts, listNucleos, addNucleo, deleteNucleo, renameNucleo, countNucleoVendas,
   registerSale, cancelSale, listTransactions, listAtividades, renameCategoria, removeCategoria, wipeData,
-  listCategorias, addCategorias,
+  listCategorias, addCategorias, updateProducts, deleteProducts,
 } from '../src/db/repo.ts'
 
 const today = () => new Date().toLocaleDateString('sv-SE')
@@ -187,5 +187,38 @@ describe('backup', () => {
   it('recusa ficheiros inválidos', async () => {
     await expect(replaceDatabase(new TextEncoder().encode('olá'))).rejects.toThrow()
     await expect(replaceDatabase(json({ products: 'x' }))).rejects.toThrow()
+  })
+})
+
+describe('caixa de destino', () => {
+  it('é copiada do produto para cada item vendido', async () => {
+    const a = await saveProduct({ nome: 'T-shirt', qtd: 5, tamanho: 'M', valor: 10, caixa_destino: ' Caixa 3 ' })
+    await registerSale({ items: [{ productId: a, quantidade: 1 }], nucleo: 'X' })
+    expect(listTransactions(today(), today())[0].caixa_destino).toBe('Caixa 3')
+  })
+
+  it('importar em merge só muda a caixa se o CSV tiver a coluna', async () => {
+    await importProducts([{ nome: 'A', qtd: 1, valor: 1, caixa_destino: 'C1' }])
+    await importProducts([{ nome: 'A', qtd: 2, valor: 1 }], 'merge')
+    expect(listProducts()[0].caixa_destino).toBe('C1')
+    await importProducts([{ nome: 'A', qtd: 2, valor: 1, caixa_destino: 'C2' }], 'merge')
+    expect(listProducts()[0].caixa_destino).toBe('C2')
+  })
+})
+
+describe('alterar produtos em lote', () => {
+  it('muda só os campos dados e junta/tira categorias', async () => {
+    const a = await saveProduct({ nome: 'A', qtd: 1, valor: 5, categorias: 'CAMISETA,OLGA', caixa_destino: 'C1' })
+    const b = await saveProduct({ nome: 'B', qtd: 2, valor: 6, categorias: 'BONE' })
+    const c = await saveProduct({ nome: 'C', qtd: 3, valor: 7 })
+    expect(await updateProducts([a, b], { valor: 10, caixa_destino: 'C9', addCategorias: ['PROMO'], removeCategorias: ['OLGA'] })).toBe(2)
+    const [pa, pb, pc] = listProducts()
+    expect(pa).toMatchObject({ qtd: 1, valor: 10, caixa_destino: 'C9', categorias: 'CAMISETA,PROMO' })
+    expect(pb).toMatchObject({ qtd: 2, valor: 10, caixa_destino: 'C9', categorias: 'BONE,PROMO' })
+    expect(pc).toMatchObject({ valor: 7, caixa_destino: '', categorias: null })
+    await updateProducts([a], { promocao: 'LEVE_2_PAGUE_1', sem_limite: true })
+    expect(listProducts()[0]).toMatchObject({ promocao: 'LEVE_2_PAGUE_1', sem_limite: true, valor: 10 })
+    expect(await deleteProducts([a, c])).toBe(2)
+    expect(listProducts().map((p) => p.nome)).toEqual(['B'])
   })
 })

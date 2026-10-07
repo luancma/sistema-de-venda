@@ -1,16 +1,17 @@
 import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useQuery } from '../db/useDb.ts'
-import { listProducts, saveProduct, deleteProduct, importProducts, listCategorias } from '../db/repo.ts'
+import { listProducts, saveProduct, deleteProduct, deleteProducts, importProducts, listCategorias } from '../db/repo.ts'
 import { parseProductsCsv, parseMoney, toCsv, ptNumber, downloadFile } from '../lib/csv.ts'
 import { PROMO_PRESETS, parsePromo, promoLabel, priceLine, formatEuro } from '../lib/pricing.ts'
 import { useToast } from '../components/Toast.tsx'
 import { useConfirm } from '../components/ConfirmProvider.tsx'
-import CategoryFilter, { CategoryFilterButton } from '../components/CategoryFilter.tsx'
+import CategoryFilter from '../components/CategoryFilter.tsx'
 import { parseCategorias, matchesCategorias } from '../lib/categorias.ts'
 import CategoriasInput from '../components/CategoriasInput.tsx'
 import { stockIlimitado, esgotado } from '../lib/stock.ts'
 import StockValue from '../components/StockValue.tsx'
 import TrashIcon from '../components/TrashIcon.tsx'
+import ProductBatchModal from '../components/ProductBatchModal.tsx'
 import type { Product } from '../types.ts'
 
 /** Produto a editar: um existente, ou um novo ainda vazio (valor e preço especial por preencher). */
@@ -48,6 +49,8 @@ export default function Produtos() {
   const [cats, setCats] = useState<string[]>([])
   const [report, setReport] = useState<ImportReport | null>(null) // resultado da última importação
   const [onlyNoPrice, setOnlyNoPrice] = useState(false)
+  const [selected, setSelected] = useState<string[]>([]) // ids marcados para alterar em lote
+  const [batchOpen, setBatchOpen] = useState(false)
 
   const shown = useMemo(() => {
     const q = filter.trim().toLowerCase()
@@ -55,6 +58,27 @@ export default function Produtos() {
     return q ? base.filter((p) => `${p.nome} ${p.tamanho}`.toLowerCase().includes(q)) : base
   }, [products, filter, onlyNoPrice, cats])
   const noPrice = products.filter((p) => !(p.valor > 0)).length
+  // só conta os marcados que ainda existem
+  const picked = useMemo(() => products.filter((p) => selected.includes(p.id)), [products, selected])
+  const allShownPicked = shown.length > 0 && shown.every((p) => selected.includes(p.id))
+  const toggle = (id: string) => setSelected(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id])
+  const toggleShown = () => {
+    const ids = shown.map((p) => p.id)
+    setSelected(allShownPicked ? selected.filter((id) => !ids.includes(id)) : [...new Set([...selected, ...ids])])
+  }
+
+  async function removePicked() {
+    const ok = await confirm({
+      title: `Apagar ${picked.length} produto(s)?`,
+      message: 'As vendas já feitas não são afetadas.',
+      confirmLabel: 'Apagar',
+      danger: true,
+    })
+    if (!ok) return
+    const n = await deleteProducts(picked.map((p) => p.id))
+    setSelected([])
+    toast(`${n} produto(s) apagado(s).`)
+  }
 
   async function onFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -86,6 +110,7 @@ export default function Produtos() {
       { header: 'PROMOCAO', value: 'promocao' },
       { header: 'PRECO ESPECIAL', value: (p) => ptNumber(p.preco_especial) },
       { header: 'CATEGORIA', value: (p) => parseCategorias(p.categorias).join(', ') },
+      { header: 'CAIXA DE DESTINO', value: 'caixa_destino' },
       { header: 'SEM LIMITE', value: (p) => (stockIlimitado(p) ? 'SIM' : '') },
     ], '\t')
     downloadFile(`stock-${today()}.csv`, csv)
@@ -139,26 +164,36 @@ export default function Produtos() {
               </label>
             )}
             <input placeholder="Filtrar…" value={filter} onChange={(e) => setFilter(e.target.value)} />
-            <CategoryFilterButton products={products} selected={cats} onChange={setCats} />
-            <button className="primary" onClick={() => setEditing({ nome: '', qtd: 0, tamanho: '', valor: '', promocao: '', preco_especial: '', sem_limite: false })}>
+            <CategoryFilter products={products} selected={cats} onChange={setCats} />
+            <button className="primary" onClick={() => setEditing({ nome: '', qtd: 0, tamanho: '', valor: '', promocao: '', preco_especial: '', sem_limite: false, caixa_destino: '' })}>
               + Novo produto
             </button>
           </div>
         </div>
-        <CategoryFilter products={products} selected={cats} onChange={setCats} />
+        {picked.length > 0 && (
+          <div className="batch-bar row wrap">
+            <strong>{picked.length} selecionado(s)</strong>
+            <button className="primary" onClick={() => setBatchOpen(true)}>Alterar em lote</button>
+            <button className="danger with-icon" onClick={removePicked}><TrashIcon size={14} />Apagar</button>
+            <button onClick={() => setSelected([])}>Limpar seleção</button>
+          </div>
+        )}
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Nome</th><th>Tamanho</th><th className="num">Qtd</th><th className="num">Valor</th><th>Categorias</th><th>Promoção</th><th></th></tr>
+              <tr><th className="pick"><input type="checkbox" checked={allShownPicked} onChange={toggleShown} disabled={!shown.length}
+                aria-label="Selecionar todos os produtos mostrados" title="Selecionar todos os mostrados" /></th><th>Nome</th><th>Tamanho</th><th className="num">Qtd</th><th className="num">Valor</th><th>Categorias</th><th>Caixa</th><th>Promoção</th><th></th></tr>
             </thead>
             <tbody>
               {shown.map((p) => (
-                <tr key={p.id} className={esgotado(p) ? 'out' : ''}>
+                <tr key={p.id} className={`${esgotado(p) ? 'out' : ''} ${selected.includes(p.id) ? 'picked' : ''}`}>
+                  <td className="pick"><input type="checkbox" checked={selected.includes(p.id)} onChange={() => toggle(p.id)} aria-label={`Selecionar ${p.nome} ${p.tamanho}`.trim()} /></td>
                   <td>{p.nome}</td>
                   <td>{p.tamanho}</td>
                   <td className="num"><StockValue product={p} /></td>
                   <td className="num">{p.valor > 0 ? formatEuro(p.valor) : <span className="badge warn">Sem preço</span>}</td>
                   <td>{parseCategorias(p.categorias).map((c) => <span key={c} className="cat-tag">{c}</span>)}</td>
+                  <td className="nowrap">{p.caixa_destino}</td>
                   <td>{promoLabel(p) && <span className="badge">{promoLabel(p)}</span>}</td>
                   <td className="actions"><button onClick={() => setEditing({ ...p })}>Editar</button></td>
                 </tr>
@@ -168,6 +203,10 @@ export default function Produtos() {
         </div>
       </section>
 
+      {batchOpen && picked.length > 0 && (
+        <ProductBatchModal products={picked} allCats={categorias.map(([c]) => c)}
+          onClose={() => setBatchOpen(false)} onDone={() => { setBatchOpen(false); setSelected([]) }} />
+      )}
       {editing && <ProductForm initial={editing} allCats={categorias.map(([c]) => c)} onClose={() => setEditing(null)} />}
     </div>
   )
@@ -194,7 +233,7 @@ function ProductForm({ initial, allCats = [], onClose }: { initial: EditingProdu
   const [leve, setLeve] = useState(parsed?.type === 'LEVE' ? parsed.leve : 3)
   const [pague, setPague] = useState(parsed?.type === 'LEVE' ? parsed.pague : 2)
   const [packN, setPackN] = useState(parsed?.type === 'PACK' ? parsed.n : 3)
-  const set = (k: 'nome' | 'tamanho' | 'qtd' | 'valor' | 'preco_especial') => (e: ChangeEvent<HTMLInputElement>) =>
+  const set = (k: 'nome' | 'tamanho' | 'qtd' | 'valor' | 'preco_especial' | 'caixa_destino') => (e: ChangeEvent<HTMLInputElement>) =>
     setF({ ...f, [k]: e.target.value })
   const [catDraft, setCatDraft] = useState('') // categoria escrita mas ainda sem Enter
 
@@ -257,6 +296,9 @@ function ProductForm({ initial, allCats = [], onClose }: { initial: EditingProdu
             <CategoriasInput value={f.categorias} onChange={(categorias) => setF({ ...f, categorias })}
               draft={catDraft} onDraft={setCatDraft} sugestoes={allCats} />
           </div>
+          <label className="span2">Caixa de destino <span className="muted">opcional</span>
+            <input value={f.caixa_destino} onChange={set('caixa_destino')} placeholder="—" />
+          </label>
           <label className="span2">Promoção
             <select value={preset} onChange={(e) => setPreset(e.target.value)}>
               {PROMO_PRESETS.map((p) => <option key={p.code} value={p.code}>{p.label}</option>)}
