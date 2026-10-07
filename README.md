@@ -83,7 +83,7 @@ T-shirt Logo	20	M	12,50
 **Produto** (`products`): `id` (uuid), `nome`, `qtd`, `tamanho`, `valor`, `promocao` (opcional), `preco_especial` (opcional).
 
 **Transação** (`transactions`) — uma linha por produto em cada venda:
-`id` (uuid), `nome_produto`, `nome` (comprador), `preco` (total da linha, já com promoção), `nucleo`, `vendedor` (o **Responsável**; no CSV: `RESPONSAVEL`), `atividade` (campo **Atividade** do topo),
+`id` (uuid), `nome_produto`, `nome` (comprador), `preco` (total da linha, já com promoção), `nucleo`, `responsavel` (o **Responsável**, quem está a usar a app; no CSV: `RESPONSAVEL`), `atividade` (campo **Atividade** do topo),
 mais campos de contexto: `venda_id` (agrupa o carrinho), `data`, `produto_id`, `tamanho`, `quantidade`,
 `preco_unitario`, `desconto` (promoção do produto), `promocao`, `observacao` (texto livre; **obrigatória quando se vende acima do stock**),
 `desconto_venda` (parte desta linha do desconto dado no carrinho) e `desconto_info` (ex.: `10%`, `-5,00 €`, `novo total 40,00 €`).
@@ -116,9 +116,7 @@ Unidades que não completam um grupo pagam o `valor` normal. Os cálculos são f
 - Os dados ficam **no browser** onde a app foi aberta (mesmo endereço, ex. `localhost:4173`).
   Abrir noutro browser/porta = base de dados vazia.
 - **Configurações → Descarregar backup** gera um ficheiro `.json` (texto legível, com produtos, vendas e núcleos)
-  e *Restaurar backup* carrega-o de volta. Backups `.sqlite` de versões anteriores também podem ser restaurados.
-- **Atualização a partir da versão SQLite**: na primeira abertura os dados antigos passam automaticamente para o
-  formato novo (o ficheiro antigo fica intacto no browser). O sql.js só é descarregado nesse caso.
+  e *Restaurar backup* carrega-o de volta.
 - **iPhone**: instala a app no ecrã principal — o Safari pode apagar dados de sites não visitados há 7 dias,
   mas não os de apps instaladas. Mesmo assim, exporta o CSV / faz backup regularmente.
 
@@ -128,7 +126,6 @@ Unidades que não completam um grupo pagam o `valor` normal. Os cálculos são f
 src/
   db/database.js   dados em memória + persistência IndexedDB + normalização (schema)
   db/repo.js       produtos, núcleos, vendas
-  db/legacySqlite.js  migração dos dados da versão antiga (SQLite), carregado só quando preciso
   db/useDb.js      hook React que re-executa queries quando a BD muda
   lib/cartStore.js     carrinho em curso (zustand, guardado em localStorage)
   lib/sessionStore.js  Atividade e Responsável (zustand, guardado em localStorage)

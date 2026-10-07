@@ -141,7 +141,7 @@ export function describeDiscount(mode, value, d) {
  * `desconto` (opcional): { mode: 'valor' | 'percent' | 'total', value } — desconto dado no carrinho,
  * repartido pelas linhas proporcionalmente ao valor de cada uma (a soma bate certo ao cêntimo).
  */
-export const registerSale = ({ items, nome, nucleo, vendedor, atividade = '', observacao = '', allowNegative = false, desconto = null }) =>
+export const registerSale = ({ items, nome, nucleo, responsavel, atividade = '', observacao = '', allowNegative = false, desconto = null }) =>
   write((s) => {
     const vendaId = uuid()
     const data = new Date().toISOString()
@@ -172,7 +172,7 @@ export const registerSale = ({ items, nome, nucleo, vendedor, atividade = '', ob
         id: uuid(), venda_id: vendaId, data, produto_id: p.id, nome_produto: p.nome, tamanho: p.tamanho,
         quantidade, preco_unitario: price.unitario, desconto: price.desconto, preco,
         promocao: p.promocao || (p.preco_especial != null ? 'PRECO_ESPECIAL' : null),
-        nome: (nome || '').trim(), nucleo: nucleo || '', vendedor: (vendedor || '').trim(),
+        nome: (nome || '').trim(), nucleo: nucleo || '', responsavel: (responsavel || '').trim(),
         observacao: observacao.trim(), desconto_venda: shares[i], desconto_info: info, atividade: (atividade || '').trim(),
       }))
       if (!stockIlimitado(p)) p.qtd -= quantidade
@@ -203,7 +203,8 @@ export function listTransactions(fromDate, toDate) {
 const distinct = (field) =>
   [...new Set(db().transactions.map((t) => t[field]).filter(Boolean))].sort(cmp)
 
-export const listSellers = () => distinct('vendedor')
+/** Responsáveis já usados nas vendas. */
+export const listResponsaveis = () => distinct('responsavel')
 
 /** Atividades já usadas (para sugerir no campo do topo). */
 export const listAtividades = () => distinct('atividade')

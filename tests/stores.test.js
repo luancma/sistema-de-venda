@@ -1,11 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 
-// localStorage em memória, já com dados no formato das versões anteriores
-const mem = new Map([
-  ['loja.carrinho', JSON.stringify({ items: { p1: 2, p2: 1 }, nome: 'Ana', nucleo: 'Porto', observacao: '', descontoMode: 'valor', descontoValue: '' })],
-  ['loja.atividade', 'Feira'],
-  ['loja.vendedor', 'Rui'],
-])
+// localStorage em memória (o node não tem)
+const mem = new Map()
 globalThis.localStorage = {
   getItem: (k) => (mem.has(k) ? mem.get(k) : null),
   setItem: (k, v) => mem.set(k, String(v)),
@@ -19,14 +15,14 @@ beforeAll(async () => {
 })
 
 describe('carrinho (zustand)', () => {
-  it('lê o carrinho guardado no formato antigo', () => {
-    expect(useCart.getState()).toMatchObject({ items: { p1: 2, p2: 1 }, nome: 'Ana', nucleo: 'Porto' })
-  })
-
   it('ações e persistência', () => {
     const c = useCart.getState()
+    c.setQty('p1', 2)
+    c.setQty('p2', 1)
+    c.setNome('Ana')
+    c.setNucleo('Porto')
     c.setQty('p1', 0) // mínimo 1
-    expect(useCart.getState().items.p1).toBe(1)
+    expect(useCart.getState().items).toEqual({ p1: 1, p2: 1 })
     c.prune(new Set(['p1']))
     expect(useCart.getState().items).toEqual({ p1: 1 })
     c.afterSale()
@@ -38,9 +34,10 @@ describe('carrinho (zustand)', () => {
 })
 
 describe('sessão (zustand)', () => {
-  it('lê Atividade e Responsável das chaves antigas e grava na nova', () => {
-    expect(useSessao.getState()).toMatchObject({ atividade: 'Feira', vendedor: 'Rui' })
-    useSessao.getState().setVendedor('Maria')
-    expect(JSON.parse(mem.get('loja.sessao')).state).toEqual({ atividade: 'Feira', vendedor: 'Maria' })
+  it('começa vazia e grava Atividade e Responsável', () => {
+    expect(useSessao.getState()).toMatchObject({ atividade: '', responsavel: '' })
+    useSessao.getState().setAtividade('Feira')
+    useSessao.getState().setResponsavel('Maria')
+    expect(JSON.parse(mem.get('loja.sessao')).state).toEqual({ atividade: 'Feira', responsavel: 'Maria' })
   })
 })

@@ -46,7 +46,7 @@ export default function ReceiptModal({ sale, onClose }) {
             {sale.nome && <><dt>Cliente</dt><dd>{sale.nome}</dd></>}
             {sale.nucleo && <><dt>Núcleo</dt><dd>{sale.nucleo}</dd></>}
             {sale.atividade && <><dt>Atividade</dt><dd>{sale.atividade}</dd></>}
-            {sale.vendedor && <><dt>Responsável</dt><dd>{sale.vendedor}</dd></>}
+            {sale.responsavel && <><dt>Responsável</dt><dd>{sale.responsavel}</dd></>}
           </dl>
           <div className="receipt-sep" />
           <table>

@@ -19,7 +19,7 @@ import TrashIcon from '../components/TrashIcon.jsx'
 const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
 export default function Vender({ goTo }) {
-  const { vendedor, atividade } = useSessao()
+  const { responsavel, atividade } = useSessao()
   const toast = useToast()
   const askConfirm = useConfirm()
   const products = useQuery(listProducts)
@@ -67,7 +67,7 @@ export default function Vender({ goTo }) {
 
   async function finalizar() {
     if (!atividade.trim()) return toast('Define a atividade em Configurações.', 'error')
-    if (!vendedor.trim()) return toast('Define o responsável em Configurações.', 'error')
+    if (!responsavel.trim()) return toast('Define o responsável em Configurações.', 'error')
     if (!nucleo) return toast('Escolhe o núcleo do comprador.', 'error')
     if (venda.error) return toast(`Desconto: ${venda.error}`, 'error')
     const semPreco = lines.filter((l) => !(l.product.valor > 0))
@@ -86,7 +86,7 @@ export default function Vender({ goTo }) {
     setBusy(true)
     try {
       const r = await registerSale({
-        items, nome, nucleo, vendedor, atividade, observacao, allowNegative,
+        items, nome, nucleo, responsavel, atividade, observacao, allowNegative,
         desconto: venda.desconto > 0 ? { mode: descontoMode, value: descontoValue } : null,
       })
       toast(`Venda registada: ${formatEuro(r.total)}`)
@@ -163,9 +163,9 @@ export default function Vender({ goTo }) {
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
           </button>
         </div>
-        {(!atividade.trim() || !vendedor.trim()) && (
+        {(!atividade.trim() || !responsavel.trim()) && (
           <div className="session-warning">
-            Falta definir {!atividade.trim() && 'a atividade'}{!atividade.trim() && !vendedor.trim() && ' e '}{!vendedor.trim() && 'o responsável'}.
+            Falta definir {!atividade.trim() && 'a atividade'}{!atividade.trim() && !responsavel.trim() && ' e '}{!responsavel.trim() && 'o responsável'}.
             <button type="button" className="small" onClick={() => goTo('config')}>Abrir Configurações</button>
           </div>
         )}

@@ -85,14 +85,14 @@ describe('vendas', () => {
     const b = await saveProduct({ nome: 'B', qtd: 5, tamanho: 'M', valor: 30 })
     const r = await registerSale({
       items: [{ productId: a, quantidade: 2 }, { productId: b, quantidade: 1 }],
-      nome: 'Ana', nucleo: 'Porto', vendedor: 'Rui', atividade: 'Feira', desconto: { mode: 'percent', value: 10 },
+      nome: 'Ana', nucleo: 'Porto', responsavel: 'Rui', atividade: 'Feira', desconto: { mode: 'percent', value: 10 },
     })
     expect(r.total).toBe(45)
     expect(listProducts().map((p) => p.qtd)).toEqual([3, 4])
     const tx = listTransactions(today(), today())
     expect(tx).toHaveLength(2)
     expect(tx.reduce((s, t) => s + t.preco, 0)).toBeCloseTo(45)
-    expect(tx[0]).toMatchObject({ venda_id: r.vendaId, nucleo: 'Porto', vendedor: 'Rui', desconto_info: '10%' })
+    expect(tx[0]).toMatchObject({ venda_id: r.vendaId, nucleo: 'Porto', responsavel: 'Rui', desconto_info: '10%' })
     expect(listAtividades()).toEqual(['Feira'])
 
     await cancelSale(r.vendaId)

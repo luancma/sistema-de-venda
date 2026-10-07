@@ -6,7 +6,6 @@
 const IDB_NAME = 'loja-db'
 const IDB_STORE = 'files'
 const IDB_KEY = 'data'
-const LEGACY_KEY = 'main.sqlite' // versões anteriores guardavam aqui o ficheiro SQLite (sql.js)
 
 export const FORMAT = 1 // versão do formato do backup .json
 
@@ -17,7 +16,7 @@ let state = null
 // cópia profunda (os dados são só texto/números; JSON funciona em qualquer browser, ao contrário do structuredClone em iOS < 15.4)
 const clone = (v) => JSON.parse(JSON.stringify(v))
 
-// ---------- normalização (equivale ao schema + defaults do antigo SQLite) ----------
+// ---------- normalização (campos e valores por defeito de cada registo) ----------
 const str = (v) => (v == null ? '' : String(v))
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0)
 const numOrNull = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v))
@@ -49,14 +48,14 @@ export const normalizeTransaction = (t) => ({
   promocao: strOrNull(t.promocao),
   nome: str(t.nome), // nome do comprador
   nucleo: str(t.nucleo),
-  vendedor: str(t.vendedor), // quem vendeu
+  responsavel: str(t.responsavel), // quem estava a usar a app (campo Responsável)
   observacao: str(t.observacao), // obrigatória ao vender sem stock
   desconto_venda: num(t.desconto_venda), // parte desta linha do desconto dado no carrinho
   desconto_info: str(t.desconto_info), // como foi dado: "10%", "-5,00 €", "total 40,00 €"
   atividade: str(t.atividade), // atividade/evento em que a venda foi feita
 })
 
-/** Valida e completa dados vindos do IndexedDB, de um backup ou do SQLite antigo. */
+/** Valida e completa dados vindos do IndexedDB ou de um backup. */
 export function normalizeData(raw) {
   if (!raw || typeof raw !== 'object') throw new Error('formato desconhecido')
   for (const k of ['products', 'transactions', 'nucleos', 'categorias']) {
@@ -108,24 +107,11 @@ export async function openDatabase() {
   if (state) return state
   if (!hasIdb()) return (state = empty())
   const saved = await idbGet(IDB_KEY)
-  if (saved) {
-    state = normalizeData(saved)
-  } else {
-    // 1.ª abertura depois da mudança: traz os dados do SQLite antigo, se existirem.
-    // O ficheiro antigo fica intacto no IndexedDB (não se apaga nada).
-    const legacy = await idbGet(LEGACY_KEY)
-    state = legacy ? normalizeData(await readLegacySqlite(legacy)) : empty()
-  }
+  state = saved ? normalizeData(saved) : empty()
   // pede ao browser para não apagar os dados quando houver pouco espaço
   navigator.storage?.persist?.().catch(() => {})
   await persist()
   return state
-}
-
-/** Lê um ficheiro .sqlite das versões anteriores. O sql.js só é descarregado quando é preciso. */
-async function readLegacySqlite(bytes) {
-  const { readSqlite } = await import('./legacySqlite.js')
-  return readSqlite(bytes)
 }
 
 /** Estado atual (só para ler dentro do db/; para escrever usa `write`). */
@@ -140,22 +126,15 @@ export function persist() {
   return saving
 }
 
-const isSqlite = (bytes) =>
-  new TextDecoder().decode(new Uint8Array(bytes).slice(0, 15)) === 'SQLite format 3'
-
-/** Substitui os dados atuais por um backup (.json, ou .sqlite de versões anteriores). */
+/** Substitui os dados atuais por um backup (.json). */
 export async function replaceDatabase(bytes) {
   let raw
-  if (isSqlite(bytes)) {
-    raw = await readLegacySqlite(bytes)
-  } else {
-    try {
-      raw = JSON.parse(new TextDecoder().decode(bytes))
-    } catch {
-      throw new Error('não é um backup da loja (.json ou .sqlite)')
-    }
-    if (raw?.formato > FORMAT) throw new Error('backup feito por uma versão mais recente da app')
+  try {
+    raw = JSON.parse(new TextDecoder().decode(bytes))
+  } catch {
+    throw new Error('não é um backup da loja (.json)')
   }
+  if (raw?.formato > FORMAT) throw new Error('backup feito por uma versão mais recente da app')
   state = normalizeData(raw)
   await persist()
   notify()

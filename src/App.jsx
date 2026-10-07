@@ -45,7 +45,7 @@ export default function App() {
     return TABS.some((t) => t.id === saved) ? saved : 'vender'
   })
   const [configOpen, setConfigOpen] = useState(isConfigUrl)
-  const { vendedor, atividade } = useSessao() // só para mostrar no topo; editam-se nas Configurações
+  const { responsavel, atividade } = useSessao() // só para mostrar no topo; editam-se nas Configurações
 
   useEffect(() => {
     openDatabase().then(() => setReady(true)).catch((e) => setError(e))
@@ -87,7 +87,7 @@ export default function App() {
           {/* só leitura: Atividade e Responsável definem-se nas Configurações */}
           <div className="session-info">
             <span>Atividade: <strong className={atividade.trim() ? '' : 'missing'}>{atividade.trim() || '—'}</strong></span>
-            <span>Responsável: <strong className={vendedor.trim() ? '' : 'missing'}>{vendedor.trim() || '—'}</strong></span>
+            <span>Responsável: <strong className={responsavel.trim() ? '' : 'missing'}>{responsavel.trim() || '—'}</strong></span>
           </div>
         </div>
         <nav className="tabs">

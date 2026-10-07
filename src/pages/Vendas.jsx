@@ -32,7 +32,7 @@ const EXPORT_COLUMNS = [
   { header: 'NOME', value: 'nome' },
   { header: 'NUCLEO', value: 'nucleo' },
   { header: 'ATIVIDADE', value: 'atividade' },
-  { header: 'RESPONSAVEL', value: 'vendedor' },
+  { header: 'RESPONSAVEL', value: 'responsavel' },
   { header: 'OBSERVACAO', value: 'observacao' },
 ]
 
@@ -50,7 +50,7 @@ export default function Vendas() {
   const sales = useMemo(() => {
     const map = new Map()
     for (const t of rows) {
-      if (!map.has(t.venda_id)) map.set(t.venda_id, { id: t.venda_id, data: t.data, nome: t.nome, nucleo: t.nucleo, vendedor: t.vendedor, atividade: t.atividade, observacao: t.observacao, lines: [], total: 0 })
+      if (!map.has(t.venda_id)) map.set(t.venda_id, { id: t.venda_id, data: t.data, nome: t.nome, nucleo: t.nucleo, responsavel: t.responsavel, atividade: t.atividade, observacao: t.observacao, lines: [], total: 0 })
       const s = map.get(t.venda_id)
       s.lines.push(t)
       s.total += t.preco
@@ -128,7 +128,7 @@ export default function Vendas() {
               <span>{s.nome || <span className="muted">sem nome</span>}</span>
               <span className="chip">{s.nucleo}</span>
               {s.atividade && <span className="chip atividade-chip">{s.atividade}</span>}
-              <span className="muted">resp. {s.vendedor}</span>
+              <span className="muted">resp. {s.responsavel}</span>
               {s.descontoVenda > 0 && <span className="badge">desconto {s.descontoInfo} −{formatEuro(s.descontoVenda)}</span>}
               <strong className="grow num">{formatEuro(s.total)}</strong>
               <button className="small" onClick={() => setReceipt(s)}>Recibo</button>

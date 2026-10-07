@@ -14,7 +14,7 @@ import TrashIcon from '../components/TrashIcon.jsx'
 const today = () => new Date().toLocaleDateString('sv-SE')
 
 export default function Config() {
-  const { vendedor, setVendedor, atividade, setAtividade } = useSessao()
+  const { responsavel, setResponsavel, atividade, setAtividade } = useSessao()
   const toast = useToast()
   const confirm = useConfirm()
   const [wiping, setWiping] = useState(null) // 'vendas' | 'tudo' — confirmação com senha aberta
@@ -60,7 +60,7 @@ export default function Config() {
             <AtividadeInput value={atividade} onChange={setAtividade} />
           </label>
           <label>Responsável
-            <input value={vendedor} onChange={(e) => setVendedor(e.target.value)} placeholder="O teu nome" />
+            <input value={responsavel} onChange={(e) => setResponsavel(e.target.value)} placeholder="O teu nome" />
           </label>
         </div>
       </section>
@@ -84,7 +84,7 @@ export default function Config() {
               <button onClick={backup}>Descarregar backup (.json)</button>
               <label className="button">
                 Restaurar backup…
-                <input type="file" accept=".json,application/json,.sqlite,.db" onChange={restore} hidden />
+                <input type="file" accept=".json,application/json" onChange={restore} hidden />
               </label>
               <button className="danger with-icon" onClick={() => setWiping('vendas')}><TrashIcon size={14} />Apagar vendas</button>
               <button className="danger with-icon" onClick={() => setWiping('tudo')}><TrashIcon size={14} />Apagar tudo</button>

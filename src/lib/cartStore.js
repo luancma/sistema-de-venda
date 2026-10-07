@@ -5,19 +5,7 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 
 const EMPTY = { items: {}, nome: '', nucleo: '', observacao: '', descontoMode: 'valor', descontoValue: '' } // items: productId -> quantidade
 
-// versões anteriores guardavam o carrinho "solto" (sem o { state, version } do zustand)
-const storage = createJSONStorage(() => ({
-  getItem: (key) => {
-    const raw = localStorage.getItem(key)
-    try {
-      const saved = JSON.parse(raw)
-      if (saved && typeof saved.items === 'object' && !('state' in saved)) return JSON.stringify({ state: saved, version: 0 })
-    } catch { /* JSON inválido: o zustand ignora */ }
-    return raw
-  },
-  setItem: (key, value) => localStorage.setItem(key, value),
-  removeItem: (key) => localStorage.removeItem(key),
-}))
+const storage = createJSONStorage(() => localStorage)
 
 const withoutItems = (items, ids) => {
   const next = { ...items }
