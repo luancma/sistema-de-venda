@@ -1,7 +1,8 @@
 # Loja — vendas offline
 
 App simples de ponto de venda feita com **Vite + React 19**. Corre 100% offline no browser:
-a base de dados é **SQLite** (via [sql.js](https://sql.js.org), WebAssembly) guardada em IndexedDB.
+os dados ficam guardados diretamente no **IndexedDB** do browser (nativo, sem WebAssembly nem bibliotecas),
+o que funciona em qualquer browser moderno — iPhone e Android incluídos.
 
 ## Como usar
 
@@ -45,8 +46,9 @@ Os dados ficam no browser de cada computador: cada posto de venda exporta o seu 
 
 ### Configurações
 
-O separador **Configurações** (no menu) tem os núcleos, o backup/restauro da base de dados, "Apagar vendas/tudo"
-e a consola SQL. Também abre pelo endereço `#config` (ex.: `http://localhost:5173/#config`).
+O separador **Configurações** (no menu) tem os núcleos, as categorias, o backup/restauro dos dados e "Apagar vendas/tudo".
+Núcleos e categorias podem ser criados, renomeados (se o novo nome já existir, juntam-se) e removidos aí.
+No **Editar/Novo produto**, as categorias escolhem-se tocando nas sugestões, ou escreve-se uma nova e carrega-se **Enter**. Também abre pelo endereço `#config` (ex.: `http://localhost:5173/#config`).
 
 Os núcleos podem ser criados diretamente no ecrã **Vender** (botão **+ Novo**).
 
@@ -69,6 +71,10 @@ T-shirt Logo	20	M	12,50
 
 - Separador tab, `;` ou `,` (detetado automaticamente). Valores aceitam `12,50`, `12.50`, `12,50 €`.
 - Colunas opcionais: `PROMOCAO`, `PRECO ESPECIAL`.
+- **Stock ilimitado** (ex.: rifas, cafés): por defeito todos os produtos têm stock controlado. Em **Produtos → Editar**,
+  o interruptor **Sem limite** faz com que a quantidade deixe de ser controlada: não é descontada nas vendas e o produto
+  nunca fica "sem stock" (aparece como ∞). No CSV, a coluna opcional `SEM LIMITE` (`SIM`/`X`) faz o mesmo; a exportação
+  do stock já a inclui, para não se perder ao reimportar.
 - Modo **Substituir** apaga os produtos e cria de novo; modo **Atualizar** procura por NOME + TAMANHO
   e atualiza QTD/VALOR, criando os que não existirem. As vendas nunca são apagadas pela importação.
 
@@ -92,7 +98,7 @@ por isso o `PRECO` de cada linha no CSV já é o valor final cobrado.
 
 ## Promoções
 
-Editáveis em **Produtos → Editar** ou diretamente com SQL em **Configurações → Consola SQL**.
+Editáveis em **Produtos → Editar** ou com as colunas `PROMOCAO` / `PRECO ESPECIAL` do CSV.
 
 | Código `promocao`  | Significado                                   | Exemplo                                  |
 |--------------------|-----------------------------------------------|------------------------------------------|
@@ -104,26 +110,28 @@ Editáveis em **Produtos → Editar** ou diretamente com SQL em **Configuraçõe
 
 Unidades que não completam um grupo pagam o `valor` normal. Os cálculos são feitos em cêntimos.
 
-```sql
-UPDATE products SET promocao = 'LEVE_2_PAGUE_1' WHERE nome LIKE 'T-shirt%';
-UPDATE products SET promocao = 'PACK_3', preco_especial = 10 WHERE nome = 'Caneca';
-UPDATE products SET promocao = NULL, preco_especial = NULL WHERE nome = 'Boné';
-```
 
 ## Dados e backups
 
 - Os dados ficam **no browser** onde a app foi aberta (mesmo endereço, ex. `localhost:4173`).
   Abrir noutro browser/porta = base de dados vazia.
-- **Configurações → Descarregar backup** gera um ficheiro `.sqlite` (abre em DB Browser for SQLite, DBeaver, etc.)
-  e *Restaurar backup* carrega-o de volta.
+- **Configurações → Descarregar backup** gera um ficheiro `.json` (texto legível, com produtos, vendas e núcleos)
+  e *Restaurar backup* carrega-o de volta. Backups `.sqlite` de versões anteriores também podem ser restaurados.
+- **Atualização a partir da versão SQLite**: na primeira abertura os dados antigos passam automaticamente para o
+  formato novo (o ficheiro antigo fica intacto no browser). O sql.js só é descarregado nesse caso.
+- **iPhone**: instala a app no ecrã principal — o Safari pode apagar dados de sites não visitados há 7 dias,
+  mas não os de apps instaladas. Mesmo assim, exporta o CSV / faz backup regularmente.
 
 ## Estrutura
 
 ```
 src/
-  db/database.js   SQLite (sql.js) + persistência IndexedDB + schema
+  db/database.js   dados em memória + persistência IndexedDB + normalização (schema)
   db/repo.js       produtos, núcleos, vendas
+  db/legacySqlite.js  migração dos dados da versão antiga (SQLite), carregado só quando preciso
   db/useDb.js      hook React que re-executa queries quando a BD muda
+  lib/cartStore.js     carrinho em curso (zustand, guardado em localStorage)
+  lib/sessionStore.js  Atividade e Responsável (zustand, guardado em localStorage)
   lib/pricing.js   motor de promoções
   lib/csv.js       importação/exportação CSV
   pages/           Vender, Produtos, Vendas, Config

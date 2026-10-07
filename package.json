@@ -17,7 +17,8 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "snes.css": "^1.0.1",
-    "sql.js": "^1.13.0"
+    "sql.js": "^1.13.0",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.1.0",

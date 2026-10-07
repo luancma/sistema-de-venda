@@ -1,29 +1,47 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '../db/useDb.js'
 import { listProducts, listNucleos, registerSale } from '../db/repo.js'
 import DiscountBox from '../components/DiscountBox.jsx'
 import { priceLine, promoLabel, formatEuro, saleDiscount } from '../lib/pricing.js'
 import { useToast } from '../components/Toast.jsx'
-import { cart as cartActions, useCart } from '../lib/cartStore.js'
+import { useConfirm } from '../components/ConfirmProvider.jsx'
+import { useCart } from '../lib/cartStore.js'
+import { useSessao } from '../lib/sessionStore.js'
+import { faltaStock, esgotado } from '../lib/stock.js'
+import StockValue from '../components/StockValue.jsx'
 import NucleosModal from '../components/NucleosModal.jsx'
 import ConfirmModal from '../components/ConfirmModal.jsx'
 import QtyInput from '../components/QtyInput.jsx'
-import CategoryFilter from '../components/CategoryFilter.jsx'
+import CategoryFilter, { CategoryFilterButton } from '../components/CategoryFilter.jsx'
 import { matchesCategorias } from '../lib/categorias.js'
+import TrashIcon from '../components/TrashIcon.jsx'
 
 const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
-export default function Vender({ vendedor, atividade, goTo }) {
+export default function Vender({ goTo }) {
+  const { vendedor, atividade } = useSessao()
   const toast = useToast()
+  const askConfirm = useConfirm()
   const products = useQuery(listProducts)
   const nucleos = useQuery(listNucleos)
   const [search, setSearch] = useState('')
   const [cats, setCats] = useState([]) // categorias selecionadas no filtro
   // o carrinho vive fora da página: não se perde ao mudar de separador
-  const { items: cart, nome, nucleo, observacao, descontoMode, descontoValue } = useCart()
-  const { setNome, setNucleo, setObservacao } = cartActions
+  const {
+    items: cart, nome, nucleo, observacao, descontoMode, descontoValue,
+    setQty, remove, setNome, setNucleo, setObservacao, setDesconto, clearDesconto, clearItems, afterSale,
+  } = useCart()
   const [busy, setBusy] = useState(false)
   const [nucleosOpen, setNucleosOpen] = useState(false)
+  // computador: carrinho num painel lateral (drawer) que abre/fecha; no telemóvel não tem efeito
+  const [drawerOpen, setDrawerOpen] = useState(() => { try { return localStorage.getItem('loja.cartDrawer') === '1' } catch { return false } })
+  useEffect(() => { try { localStorage.setItem('loja.cartDrawer', drawerOpen ? '1' : '0') } catch { /* ignora */ } }, [drawerOpen])
+  useEffect(() => {
+    if (!drawerOpen) return
+    const onKey = (e) => e.key === 'Escape' && !document.querySelector('.modal-backdrop') && setDrawerOpen(false)
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [drawerOpen])
   const [confirm, setConfirm] = useState(null) // { line } para apagar um artigo, ou { all: true } para limpar
 
   const byId = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products])
@@ -36,15 +54,15 @@ export default function Vender({ vendedor, atividade, goTo }) {
     .filter(([id]) => byId[id])
     .map(([id, q]) => ({ product: byId[id], quantidade: q, ...priceLine(byId[id], q) }))
   const total = lines.reduce((s, l) => s + l.total, 0)
-  const semStock = lines.filter((l) => l.quantidade > l.product.qtd)
+  const semStock = lines.filter((l) => faltaStock(l.product, l.quantidade))
   const desconto = lines.reduce((s, l) => s + l.desconto, 0) // promoções dos produtos
   const venda = saleDiscount(total, descontoMode, descontoValue) // desconto dado no carrinho
 
-  const setQty = cartActions.setQty
   const add = (p) => {
     const q = (cart[p.id] || 0) + 1
-    if (q > p.qtd) toast(`Atenção: só há ${p.qtd} em stock de ${p.nome} ${p.tamanho}`, 'warn')
+    if (faltaStock(p, q)) toast(`Atenção: só há ${p.qtd} em stock de ${p.nome} ${p.tamanho}`, 'warn')
     setQty(p.id, q)
+    setDrawerOpen(true) // no computador abre o carrinho (no telemóvel não tem efeito)
   }
 
   async function finalizar() {
@@ -53,8 +71,11 @@ export default function Vender({ vendedor, atividade, goTo }) {
     if (!nucleo) return toast('Escolhe o núcleo do comprador.', 'error')
     if (venda.error) return toast(`Desconto: ${venda.error}`, 'error')
     const semPreco = lines.filter((l) => !(l.product.valor > 0))
-    if (semPreco.length && !window.confirm(
-      `Sem preço definido: ${semPreco.map((l) => l.product.nome).join(', ')}.\nVender a 0 € mesmo assim?`)) return
+    if (semPreco.length && !(await askConfirm({
+      title: 'Vender a 0 €?',
+      message: `Sem preço definido: ${semPreco.map((l) => l.product.nome).join(', ')}.`,
+      confirmLabel: 'Vender a 0 €',
+    }))) return
     const items = lines.map((l) => ({ productId: l.product.id, quantidade: l.quantidade }))
     // vender sem stock só com justificação na observação
     const allowNegative = semStock.length > 0
@@ -69,7 +90,7 @@ export default function Vender({ vendedor, atividade, goTo }) {
         desconto: venda.desconto > 0 ? { mode: descontoMode, value: descontoValue } : null,
       })
       toast(`Venda registada: ${formatEuro(r.total)}`)
-      cartActions.afterSale()
+      afterSale()
     } catch (e) {
       toast(e.message, 'error')
     } finally {
@@ -87,26 +108,29 @@ export default function Vender({ vendedor, atividade, goTo }) {
   }
 
   return (
-    <div className="pos">
+    <div className={`pos ${drawerOpen ? 'drawer-open' : ''}`}>
       <section className="catalog">
-        <input
-          className="search"
-          autoFocus
-          placeholder="Procurar produto…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <div className="search-row">
+          <input
+            className="search"
+            autoFocus
+            placeholder="Procurar produto…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <CategoryFilterButton products={products} selected={cats} onChange={setCats} />
+        </div>
         <CategoryFilter products={products} selected={cats} onChange={setCats} />
         <div className="grid">
           {filtered.map((p) => {
             const promo = promoLabel(p)
             return (
-              <button key={p.id} className={`card ${p.qtd <= 0 ? 'out' : ''} ${cart[p.id] ? 'in-cart' : ''}`} onClick={() => add(p)}>
+              <button key={p.id} className={`card ${esgotado(p) ? 'out' : ''} ${cart[p.id] ? 'in-cart' : ''}`} onClick={() => add(p)}>
                 <span className="card-name">{p.nome}</span>
                 {p.tamanho && <span className="card-size">{p.tamanho}</span>}
                 <span className="card-price">{p.valor > 0 ? formatEuro(p.valor) : <span className="badge warn">Sem preço</span>}</span>
                 {promo && <span className="badge">{promo}</span>}
-                <span className="card-stock">Stock: {p.qtd}</span>
+                <span className="card-stock">Stock: <StockValue product={p} /></span>
                 {cart[p.id] > 0 && <span className="card-count">{cart[p.id]}</span>}
               </button>
             )
@@ -122,8 +146,23 @@ export default function Vender({ vendedor, atividade, goTo }) {
         </button>
       )}
 
-      <aside className="cart" id="carrinho">
-        <h2>Carrinho</h2>
+      {/* botão do drawer (só aparece no computador) */}
+      <button type="button" className="cart-toggle" onClick={() => setDrawerOpen(true)} aria-expanded={drawerOpen} aria-controls="carrinho">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 8H6.2" /><circle cx="9" cy="20" r="1.4" /><circle cx="17" cy="20" r="1.4" />
+        </svg>
+        Carrinho
+        {lines.length > 0 && <span className="cart-toggle-count">{lines.reduce((n, l) => n + l.quantidade, 0)}</span>}
+        <strong>{formatEuro(venda.desconto > 0 ? venda.total : total)}</strong>
+      </button>
+
+      <aside className="cart" id="carrinho" aria-label="Carrinho">
+        <div className="cart-head">
+          <h2>Carrinho</h2>
+          <button type="button" className="drawer-close" onClick={() => setDrawerOpen(false)} aria-label="Fechar carrinho" title="Fechar (Esc)">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+        </div>
         {(!atividade.trim() || !vendedor.trim()) && (
           <div className="session-warning">
             Falta definir {!atividade.trim() && 'a atividade'}{!atividade.trim() && !vendedor.trim() && ' e '}{!vendedor.trim() && 'o responsável'}.
@@ -133,10 +172,10 @@ export default function Vender({ vendedor, atividade, goTo }) {
         {!lines.length && <p className="muted">Clica num produto para adicionar.</p>}
         <ul className="cart-lines">
           {lines.map((l) => (
-            <li key={l.product.id} className={l.quantidade > l.product.qtd ? 'no-stock' : ''}>
+            <li key={l.product.id} className={faltaStock(l.product, l.quantidade) ? 'no-stock' : ''}>
               <div className="line-info">
                 <strong>{l.product.nome}</strong> {l.product.tamanho && <span className="muted">· {l.product.tamanho}</span>}
-                {l.quantidade > l.product.qtd && (
+                {faltaStock(l.product, l.quantidade) && (
                   <div className="stock-alert">
                     {l.product.qtd <= 0 ? 'Sem stock' : `Só há ${l.product.qtd} em stock`}
                   </div>
@@ -152,9 +191,7 @@ export default function Vender({ vendedor, atividade, goTo }) {
                 aria-label={`Apagar ${l.product.nome} ${l.product.tamanho}`}
                 title="Apagar do carrinho"
               >
-                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6" />
-                </svg>
+                <TrashIcon />
               </button>
             </li>
           ))}
@@ -207,8 +244,8 @@ export default function Vender({ vendedor, atividade, goTo }) {
           value={descontoValue}
           subtotal={total}
           result={venda}
-          onChange={cartActions.setDesconto}
-          onClear={cartActions.clearDesconto}
+          onChange={setDesconto}
+          onClear={clearDesconto}
         />
 
         <div className="totals">
@@ -222,7 +259,7 @@ export default function Vender({ vendedor, atividade, goTo }) {
           <div className="total">Total <span>{formatEuro(venda.desconto > 0 ? venda.total : total)}</span></div>
         </div>
         <div className="row">
-          <button onClick={() => setConfirm({ all: true })} disabled={!lines.length || busy}>Limpar</button>
+          <button className="with-icon" onClick={() => setConfirm({ all: true })} disabled={!lines.length || busy}><TrashIcon size={14} />Limpar</button>
           <button className="primary grow" onClick={finalizar} disabled={!lines.length || busy}>
             Finalizar venda
           </button>
@@ -235,7 +272,7 @@ export default function Vender({ vendedor, atividade, goTo }) {
           confirmLabel="Apagar"
           danger
           onCancel={() => setConfirm(null)}
-          onConfirm={() => { cartActions.remove(confirm.line.product.id); setConfirm(null) }}
+          onConfirm={() => { remove(confirm.line.product.id); setConfirm(null) }}
         >
           <strong>{confirm.line.quantidade}× {confirm.line.product.nome}</strong>
           {confirm.line.product.tamanho && ` · ${confirm.line.product.tamanho}`} — {formatEuro(confirm.line.total)}
@@ -247,7 +284,7 @@ export default function Vender({ vendedor, atividade, goTo }) {
           confirmLabel="Limpar tudo"
           danger
           onCancel={() => setConfirm(null)}
-          onConfirm={() => { cartActions.clearItems(); setConfirm(null) }}
+          onConfirm={() => { clearItems(); setConfirm(null) }}
         >
           Todos os {lines.length} artigo(s) vão ser removidos.
         </ConfirmModal>

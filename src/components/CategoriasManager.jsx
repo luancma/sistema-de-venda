@@ -1,21 +1,30 @@
 import { useState } from 'react'
 import { useQuery } from '../db/useDb.js'
-import { listProducts, renameCategoria, removeCategoria } from '../db/repo.js'
-import { countCategorias, similarGroups, parseCategorias } from '../lib/categorias.js'
+import { listCategorias, addCategorias, renameCategoria, removeCategoria } from '../db/repo.js'
+import { similarGroups, parseCategorias } from '../lib/categorias.js'
 import ConfirmModal from './ConfirmModal.jsx'
 import { useToast } from './Toast.jsx'
+import TrashIcon from './TrashIcon.jsx'
 
-/** Secção "Categorias" das Configurações: renomear, juntar duplicadas e remover. */
+/** Secção "Categorias" das Configurações: criar, renomear, juntar duplicadas e remover. */
 export default function CategoriasManager() {
   const toast = useToast()
-  const products = useQuery(listProducts)
-  const cats = countCategorias(products) // [[nome, nº produtos]]
+  const cats = useQuery(listCategorias) // [[nome, nº produtos]]
   const count = Object.fromEntries(cats)
   const names = cats.map(([c]) => c)
   const dupes = similarGroups(names)
   const [editing, setEditing] = useState(null) // nome em edição
   const [draft, setDraft] = useState('')
   const [removing, setRemoving] = useState(null)
+  const [nova, setNova] = useState('')
+
+  async function add(e) {
+    e.preventDefault()
+    if (!parseCategorias(nova).length) return
+    const criadas = await addCategorias(nova)
+    toast(criadas.length ? `Criada(s): ${criadas.join(', ')}.` : 'Essa categoria já existe.', criadas.length ? 'ok' : 'warn')
+    setNova('')
+  }
 
   async function rename(e) {
     e.preventDefault()
@@ -41,8 +50,13 @@ export default function CategoriasManager() {
     <section className="panel">
       <h2>Categorias</h2>
       <p className="muted">
-        As categorias vêm do CSV ou de Produtos → Editar. Aqui podes renomear (se o novo nome já existir, juntam-se) ou remover.
+        Também se criam no CSV ou em Produtos → Editar. Ao renomear, os produtos mudam também (se o novo nome já existir,
+        juntam-se); ao remover, a categoria sai dos produtos (os produtos não são apagados).
       </p>
+      <form className="row" onSubmit={add}>
+        <input value={nova} onChange={(e) => setNova(e.target.value)} placeholder="Nova categoria (podes colar várias separadas por vírgula)" className="grow" />
+        <button className="primary">Adicionar</button>
+      </form>
 
       {dupes.length > 0 && (
         <div className="dupes">
@@ -72,7 +86,7 @@ export default function CategoriasManager() {
                 <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" /></svg>
               </button>
               <button className="chip-icon danger-icon" onClick={() => setRemoving(c)} aria-label={`remover ${c}`} title="Remover">
-                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                <TrashIcon />
               </button>
             </span>
           ),
@@ -88,11 +102,13 @@ export default function CategoriasManager() {
           onCancel={() => setRemoving(null)}
           onConfirm={async () => {
             const n = await removeCategoria(removing)
-            toast(`${removing} removida de ${n} produto(s).`)
+            toast(n ? `${removing} removida de ${n} produto(s).` : `${removing} removida.`)
             setRemoving(null)
           }}
         >
-          <strong>{removing}</strong> vai sair de {count[removing]} produto(s). Os produtos não são apagados.
+          <strong>{removing}</strong> {count[removing]
+            ? `vai sair de ${count[removing]} produto(s). Os produtos não são apagados.`
+            : 'ainda não é usada em nenhum produto.'}
         </ConfirmModal>
       )}
     </section>

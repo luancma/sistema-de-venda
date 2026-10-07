@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { formatEuro } from '../lib/pricing.js'
+import TrashIcon from './TrashIcon.jsx'
 
 const MODES = [
   { id: 'valor', label: '€ desconto', hint: 'Valor a descontar (€)' },
@@ -45,7 +46,7 @@ export default function DiscountBox({ mode, value, subtotal, result, onChange, o
             −{formatEuro(result.desconto)} ({String(result.percent).replace('.', ',')}%) → {formatEuro(result.total)}
           </p>
         )}
-      <button type="button" className="small" onClick={() => { onClear(); setOpen(false) }}>Remover desconto</button>
+      <button type="button" className="small with-icon" onClick={() => { onClear(); setOpen(false) }}><TrashIcon size={14} />Remover desconto</button>
     </div>
   )
 }

@@ -32,7 +32,7 @@ export default defineConfig(({ mode }) => {
           injectRegister: 'script-defer',
           includeAssets: ['icon-180.png'],
           workbox: {
-            // guarda TUDO (incluindo o motor SQLite .wasm) no telemóvel para funcionar offline
+            // guarda TUDO no telemóvel para funcionar offline (o .wasm só é usado para migrar dados da versão SQLite antiga)
             globPatterns: ['**/*.{js,css,html,wasm,png,svg}'],
             maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
             navigateFallback: 'index.html',

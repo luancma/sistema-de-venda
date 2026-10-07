@@ -25,7 +25,12 @@ const HEADER_ALIASES = {
   PRECO_ESPECIAL: 'preco_especial',
   CATEGORIA: 'categorias',
   CATEGORIAS: 'categorias',
+  SEM_LIMITE: 'sem_limite',
+  ILIMITADO: 'sem_limite',
 }
+
+/** "SIM", "S", "X", "1", "TRUE" -> true; vazio/outros -> false; coluna inexistente -> undefined */
+const parseSimNao = (v) => (v === undefined ? undefined : /^(sim|s|x|1|true|yes|y)$/i.test(String(v).trim()))
 
 /** Converte "12,50 €", "1.234,50", "12.5" em número. Devolve null se vazio/ inválido. */
 export function parseMoney(raw) {
@@ -109,6 +114,7 @@ export function parseProductsCsv(text) {
       promocao: promo?.promocao ?? null,
       preco_especial,
       categorias: parseCategorias(row.categorias),
+      sem_limite: fields.includes('sem_limite') ? parseSimNao(row.sem_limite) : undefined,
     })
   })
   return { products, errors, warnings }

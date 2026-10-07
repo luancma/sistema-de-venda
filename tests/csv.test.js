@@ -57,3 +57,12 @@ describe('CATEGORIA', () => {
     expect(products.map((p) => [p.tamanho, p.categorias])).toEqual([['M', ['CAMISETA', 'OLGA']], ['', ['BOTTON']], ['', []]])
   })
 })
+
+describe('coluna SEM LIMITE', () => {
+  it('lê SIM/X como true, vazio como false, e sem coluna fica undefined', () => {
+    const com = parseProductsCsv('NOME;QTD;TAMANHO;VALOR;SEM LIMITE\nRifa;;;1;SIM\nCaneca;3;;2;\nBolo;;;1;x')
+    expect(com.products.map((p) => p.sem_limite)).toEqual([true, false, true])
+    const sem = parseProductsCsv('NOME;QTD;TAMANHO;VALOR\nRifa;;;1')
+    expect(sem.products[0].sem_limite).toBeUndefined()
+  })
+})

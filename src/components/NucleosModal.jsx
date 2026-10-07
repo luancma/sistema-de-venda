@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '../db/useDb.js'
 import { listNucleos, addNucleo, deleteNucleo } from '../db/repo.js'
+import TrashIcon from './TrashIcon.jsx'
 
 /**
  * Modal para criar/remover núcleos sem sair do ecrã de venda.
@@ -49,7 +50,7 @@ export default function NucleosModal({ onClose, onAdded }) {
           {nucleos.map((n) => (
             <span key={n} className="chip">
               {n}
-              <button className="chip-x" onClick={() => deleteNucleo(n)} aria-label={`remover ${n}`}>×</button>
+              <button className="chip-icon danger-icon" onClick={() => deleteNucleo(n)} aria-label={`remover ${n}`} title="Remover"><TrashIcon /></button>
             </span>
           ))}
           {!nucleos.length && <span className="muted">Ainda não há núcleos.</span>}

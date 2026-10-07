@@ -4,7 +4,9 @@ import { listTransactions, cancelSale } from '../db/repo.js'
 import { toCsv, ptNumber, downloadFile } from '../lib/csv.js'
 import { formatEuro, promoCodeLabel } from '../lib/pricing.js'
 import { useToast } from '../components/Toast.jsx'
+import { useConfirm } from '../components/ConfirmProvider.jsx'
 import ReceiptModal from '../components/ReceiptModal.jsx'
+import TrashIcon from '../components/TrashIcon.jsx'
 
 const today = () => new Date().toLocaleDateString('sv-SE') // YYYY-MM-DD local
 const fmtDateTime = (iso) => new Date(iso).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' })
@@ -37,6 +39,7 @@ const EXPORT_COLUMNS = [
 export default function Vendas() {
   const [receipt, setReceipt] = useState(null) // venda cujo recibo está aberto
   const toast = useToast()
+  const confirm = useConfirm()
   const [from, setFrom] = useState(today)
   const [to, setTo] = useState(today)
   const rowsAll = useQuery(() => listTransactions(from, to), [from, to])
@@ -73,7 +76,13 @@ export default function Vendas() {
   }
 
   async function cancel(s) {
-    if (!window.confirm(`Anular a venda de ${fmtTime(s.data)} (${formatEuro(s.total)})? O stock é reposto.`)) return
+    const ok = await confirm({
+      title: 'Anular venda?',
+      message: `Venda de ${fmtTime(s.data)} (${formatEuro(s.total)}). O stock é reposto.`,
+      confirmLabel: 'Anular venda',
+      danger: true,
+    })
+    if (!ok) return
     await cancelSale(s.id)
     toast('Venda anulada e stock reposto.')
   }
@@ -123,7 +132,7 @@ export default function Vendas() {
               {s.descontoVenda > 0 && <span className="badge">desconto {s.descontoInfo} −{formatEuro(s.descontoVenda)}</span>}
               <strong className="grow num">{formatEuro(s.total)}</strong>
               <button className="small" onClick={() => setReceipt(s)}>Recibo</button>
-              <button className="danger small" onClick={() => cancel(s)}>Anular</button>
+              <button className="danger small with-icon" onClick={() => cancel(s)}><TrashIcon size={14} />Anular</button>
             </div>
             {s.observacao && <p className="sale-obs">Obs.: {s.observacao}</p>}
             <ul>

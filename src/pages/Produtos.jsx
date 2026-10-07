@@ -1,17 +1,24 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '../db/useDb.js'
-import { listProducts, saveProduct, deleteProduct, importProducts } from '../db/repo.js'
+import { listProducts, saveProduct, deleteProduct, importProducts, listCategorias } from '../db/repo.js'
 import { parseProductsCsv, parseMoney, toCsv, ptNumber, downloadFile } from '../lib/csv.js'
 import { PROMO_PRESETS, parsePromo, promoLabel, priceLine, formatEuro } from '../lib/pricing.js'
 import { useToast } from '../components/Toast.jsx'
-import CategoryFilter from '../components/CategoryFilter.jsx'
-import { parseCategorias, matchesCategorias, countCategorias } from '../lib/categorias.js'
+import { useConfirm } from '../components/ConfirmProvider.jsx'
+import CategoryFilter, { CategoryFilterButton } from '../components/CategoryFilter.jsx'
+import { parseCategorias, matchesCategorias } from '../lib/categorias.js'
+import CategoriasInput from '../components/CategoriasInput.jsx'
+import { stockIlimitado, esgotado } from '../lib/stock.js'
+import StockValue from '../components/StockValue.jsx'
+import TrashIcon from '../components/TrashIcon.jsx'
 
 const today = () => new Date().toLocaleDateString('sv-SE') // YYYY-MM-DD local
 
 export default function Produtos() {
   const toast = useToast()
+  const confirm = useConfirm()
   const products = useQuery(listProducts)
+  const categorias = useQuery(listCategorias)
   const [editing, setEditing] = useState(null)
   const [mode, setMode] = useState('replace')
   const [filter, setFilter] = useState('')
@@ -35,8 +42,12 @@ export default function Produtos() {
       setReport({ title: 'Nada importado', errors, warnings })
       return toast(errors[0] || 'O ficheiro não tem produtos.', 'error')
     }
-    if (mode === 'replace' && products.length &&
-      !window.confirm(`Substituir os ${products.length} produtos atuais por ${rows.length} do ficheiro?`)) return
+    if (mode === 'replace' && products.length && !(await confirm({
+      title: 'Substituir produtos?',
+      message: `Os ${products.length} produtos atuais vão ser substituídos por ${rows.length} do ficheiro. As vendas mantêm-se.`,
+      confirmLabel: 'Substituir',
+      danger: true,
+    }))) return
     const r = await importProducts(rows, mode)
     const title = `${r.created} criados, ${r.updated} atualizados`
     setReport(errors.length || warnings.length ? { title, errors, warnings } : null)
@@ -52,6 +63,7 @@ export default function Produtos() {
       { header: 'PROMOCAO', value: 'promocao' },
       { header: 'PRECO ESPECIAL', value: (p) => ptNumber(p.preco_especial) },
       { header: 'CATEGORIA', value: (p) => parseCategorias(p.categorias).join(', ') },
+      { header: 'SEM LIMITE', value: (p) => (stockIlimitado(p) ? 'SIM' : '') },
     ], '\t')
     downloadFile(`stock-${today()}.csv`, csv)
   }
@@ -104,7 +116,8 @@ export default function Produtos() {
               </label>
             )}
             <input placeholder="Filtrar…" value={filter} onChange={(e) => setFilter(e.target.value)} />
-            <button className="primary" onClick={() => setEditing({ nome: '', qtd: 0, tamanho: '', valor: '', promocao: '', preco_especial: '' })}>
+            <CategoryFilterButton products={products} selected={cats} onChange={setCats} />
+            <button className="primary" onClick={() => setEditing({ nome: '', qtd: 0, tamanho: '', valor: '', promocao: '', preco_especial: '', sem_limite: false })}>
               + Novo produto
             </button>
           </div>
@@ -117,10 +130,10 @@ export default function Produtos() {
             </thead>
             <tbody>
               {shown.map((p) => (
-                <tr key={p.id} className={p.qtd <= 0 ? 'out' : ''}>
+                <tr key={p.id} className={esgotado(p) ? 'out' : ''}>
                   <td>{p.nome}</td>
                   <td>{p.tamanho}</td>
-                  <td className="num">{p.qtd}</td>
+                  <td className="num"><StockValue product={p} /></td>
                   <td className="num">{p.valor > 0 ? formatEuro(p.valor) : <span className="badge warn">Sem preço</span>}</td>
                   <td>{parseCategorias(p.categorias).map((c) => <span key={c} className="cat-tag">{c}</span>)}</td>
                   <td>{promoLabel(p) && <span className="badge">{promoLabel(p)}</span>}</td>
@@ -132,7 +145,7 @@ export default function Produtos() {
         </div>
       </section>
 
-      {editing && <ProductForm initial={editing} allCats={countCategorias(products).map(([c]) => c)} onClose={() => setEditing(null)} />}
+      {editing && <ProductForm initial={editing} allCats={categorias.map(([c]) => c)} onClose={() => setEditing(null)} />}
     </div>
   )
 }
@@ -146,18 +159,20 @@ function presetFor(code) {
 
 function ProductForm({ initial, allCats = [], onClose }) {
   const toast = useToast()
+  const confirm = useConfirm()
   const parsed = parsePromo(initial.promocao)
   const [f, setF] = useState({
     ...initial,
     valor: initial.valor === '' ? '' : String(initial.valor).replace('.', ','),
     preco_especial: initial.preco_especial == null ? '' : String(initial.preco_especial).replace('.', ','),
-    categorias: parseCategorias(initial.categorias).join(', '),
+    categorias: parseCategorias(initial.categorias),
   })
   const [preset, setPreset] = useState(presetFor(initial.promocao))
   const [leve, setLeve] = useState(parsed?.type === 'LEVE' ? parsed.leve : 3)
   const [pague, setPague] = useState(parsed?.type === 'LEVE' ? parsed.pague : 2)
   const [packN, setPackN] = useState(parsed?.type === 'PACK' ? parsed.n : 3)
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
+  const [catDraft, setCatDraft] = useState('') // categoria escrita mas ainda sem Enter
 
   const promocao =
     preset === 'LEVE_N_PAGUE_M' ? `LEVE_${leve}_PAGUE_${pague}` : preset === 'PACK_N' ? `PACK_${packN}` : preset
@@ -170,13 +185,21 @@ function ProductForm({ initial, allCats = [], onClose }) {
     if (candidate.valor == null) return toast('Valor inválido.', 'error')
     if (promocao && !parsePromo(promocao)) return toast('Promoção inválida: "pague" tem de ser menor que "leve".', 'error')
     if (preset === 'PACK_N' && candidate.preco_especial == null) return toast('O pack precisa de um preço especial.', 'error')
-    await saveProduct({ ...candidate, qtd: parseInt(f.qtd, 10) || 0 })
+    // o que ficou escrito no campo das categorias (sem Enter) também conta
+    const categorias = [...new Set([...f.categorias, ...parseCategorias(catDraft)])]
+    await saveProduct({ ...candidate, categorias, qtd: parseInt(f.qtd, 10) || 0 })
     toast('Produto guardado.')
     onClose()
   }
 
   async function remove() {
-    if (!window.confirm(`Apagar "${f.nome} ${f.tamanho}"? As vendas já feitas não são afetadas.`)) return
+    const ok = await confirm({
+      title: 'Apagar produto?',
+      message: `${`${f.nome} ${f.tamanho}`.trim()}. As vendas já feitas não são afetadas.`,
+      confirmLabel: 'Apagar',
+      danger: true,
+    })
+    if (!ok) return
     await deleteProduct(f.id)
     toast('Produto apagado.')
     onClose()
@@ -189,21 +212,26 @@ function ProductForm({ initial, allCats = [], onClose }) {
         <div className="form-grid">
           <label className="span2">Nome<input value={f.nome} onChange={set('nome')} autoFocus /></label>
           <label>Tamanho<input value={f.tamanho} onChange={set('tamanho')} /></label>
-          <label>Quantidade<input type="number" value={f.qtd} onChange={set('qtd')} /></label>
+          <div className="field">
+            Quantidade
+            {f.sem_limite
+              ? <input value="∞ sem limite" disabled />
+              : <input type="number" value={f.qtd} onChange={set('qtd')} aria-label="Quantidade" />}
+            <label className="toggle">
+              <input type="checkbox" checked={Boolean(f.sem_limite)} onChange={(e) => setF({ ...f, sem_limite: e.target.checked })} />
+              <span className="toggle-track" aria-hidden="true" />
+              <span>Sem limite <span className="muted">(nunca esgota)</span></span>
+            </label>
+          </div>
           <label>Valor (€)<input inputMode="decimal" value={f.valor} onChange={set('valor')} placeholder="0,00" /></label>
           <label>Preço especial (€) <span className="muted">opcional</span>
             <input inputMode="decimal" value={f.preco_especial} onChange={set('preco_especial')} placeholder="—" />
           </label>
-          <label className="span2">Categorias <span className="muted">separadas por vírgula</span>
-            <input value={f.categorias} onChange={set('categorias')} placeholder="ex.: CAMISETA, OLGA" />
-          </label>
-          {allCats.length > 0 && (
-            <div className="span2 cat-quick">
-              {allCats.filter((c) => !parseCategorias(f.categorias).includes(c)).map((c) => (
-                <button key={c} type="button" className="cat-chip" onClick={() => setF({ ...f, categorias: [...parseCategorias(f.categorias), c].join(', ') })}>+ {c}</button>
-              ))}
-            </div>
-          )}
+          <div className="span2 field">
+            Categorias
+            <CategoriasInput value={f.categorias} onChange={(categorias) => setF({ ...f, categorias })}
+              draft={catDraft} onDraft={setCatDraft} sugestoes={allCats} />
+          </div>
           <label className="span2">Promoção
             <select value={preset} onChange={(e) => setPreset(e.target.value)}>
               {PROMO_PRESETS.map((p) => <option key={p.code} value={p.code}>{p.label}</option>)}
@@ -230,7 +258,7 @@ function ProductForm({ initial, allCats = [], onClose }) {
           </div>
         )}
         <div className="row between">
-          {f.id ? <button type="button" className="danger" onClick={remove}>Apagar</button> : <span />}
+          {f.id ? <button type="button" className="danger with-icon" onClick={remove}><TrashIcon size={14} />Apagar</button> : <span />}
           <div className="row">
             <button type="button" onClick={onClose}>Cancelar</button>
             <button type="submit" className="primary">Guardar</button>

@@ -1,17 +1,32 @@
 import { useEffect, useState } from 'react'
 import { openDatabase } from './db/database.js'
 import { ToastProvider } from './components/Toast.jsx'
+import { ConfirmProvider } from './components/ConfirmProvider.jsx'
 import Vender from './pages/Vender.jsx'
 import Produtos from './pages/Produtos.jsx'
 import Vendas from './pages/Vendas.jsx'
 import Config from './pages/Config.jsx'
 import CartBadge from './components/CartBadge.jsx'
+import { useSessao } from './lib/sessionStore.js'
 
 const TABS = [
   { id: 'vender', label: 'Vender', Comp: Vender },
   { id: 'produtos', label: 'Produtos', Comp: Produtos },
   { id: 'vendas', label: 'Vendas do dia', Comp: Vendas },
 ]
+
+// ícones da barra inferior (telemóvel)
+const svg = (children) => (
+  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{children}</svg>
+)
+const NAV_ICONS = {
+  vender: svg(<><path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 8H6.2" /><circle cx="9" cy="20" r="1.4" /><circle cx="17" cy="20" r="1.4" /></>),
+  produtos: svg(<><path d="M3 7l9-4 9 4-9 4-9-4z" /><path d="M3 7v10l9 4 9-4V7" /><path d="M12 11v10" /></>),
+  vendas: svg(<><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path d="M9 8h6M9 12h6M9 16h4" /></>),
+  config: svg(<><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" /></>),
+}
+// nomes curtos para a barra inferior
+const NAV_SHORT = { vender: 'Vender', produtos: 'Produtos', vendas: 'Vendas', config: 'Config.' }
 
 // O separador Configurações usa o endereço …/#config (também se pode abrir diretamente por aí).
 const CONFIG_HASH = '#config'
@@ -30,8 +45,7 @@ export default function App() {
     return TABS.some((t) => t.id === saved) ? saved : 'vender'
   })
   const [configOpen, setConfigOpen] = useState(isConfigUrl)
-  const [vendedor, setVendedor] = useState(() => store.get('loja.vendedor')) // "Responsável"
-  const [atividade, setAtividade] = useState(() => store.get('loja.atividade'))
+  const { vendedor, atividade } = useSessao() // só para mostrar no topo; editam-se nas Configurações
 
   useEffect(() => {
     openDatabase().then(() => setReady(true)).catch((e) => setError(e))
@@ -55,8 +69,6 @@ export default function App() {
     setConfigOpen(false)
     if (TABS.some((t) => t.id === id)) setTab(id)
   }
-  useEffect(() => store.set('loja.vendedor', vendedor), [vendedor])
-  useEffect(() => store.set('loja.atividade', atividade), [atividade])
 
   if (error) return <div className="center error">Erro ao abrir a base de dados: {String(error.message || error)}</div>
   if (!ready) return <div className="center">A carregar…</div>
@@ -65,6 +77,7 @@ export default function App() {
 
   return (
     <ToastProvider>
+      <ConfirmProvider>
       <header className="topbar">
         <div className="topbar-main">
           <strong className="brand">
@@ -91,11 +104,27 @@ export default function App() {
       </header>
       <main>
         {configOpen ? (
-          <Config vendedor={vendedor} setVendedor={setVendedor} atividade={atividade} setAtividade={setAtividade} goTo={goTo} />
+          <Config goTo={goTo} />
         ) : (
-          <Current vendedor={vendedor} atividade={atividade} goTo={goTo} />
+          <Current goTo={goTo} />
         )}
       </main>
+      {/* telemóvel: menu fixo no fundo do ecrã, ao alcance do polegar (no computador fica escondido) */}
+      <nav className="bottom-nav" aria-label="Menu">
+        {[...TABS.map((t) => t.id), 'config'].map((id) => {
+          const active = id === 'config' ? configOpen : !configOpen && id === tab
+          return (
+            <button key={id} className={active ? 'active' : ''} aria-current={active ? 'page' : undefined} onClick={() => goTo(id)}>
+              <span className="bottom-nav-icon">
+                {NAV_ICONS[id]}
+                {id === 'vender' && <CartBadge />}
+              </span>
+              {NAV_SHORT[id]}
+            </button>
+          )
+        })}
+      </nav>
+      </ConfirmProvider>
     </ToastProvider>
   )
 }
