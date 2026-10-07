@@ -1,6 +1,6 @@
 # Loja — vendas offline
 
-App simples de ponto de venda feita com **Vite + React 19**. Corre 100% offline no browser:
+App simples de ponto de venda feita com **Vite + React 19 + TypeScript**. Corre 100% offline no browser:
 os dados ficam guardados diretamente no **IndexedDB** do browser (nativo, sem WebAssembly nem bibliotecas),
 o que funciona em qualquer browser moderno — iPhone e Android incluídos.
 
@@ -12,6 +12,8 @@ npm run dev          # desenvolvimento -> http://localhost:5173
 # ou, para o dia da venda:
 npm run build && npm run preview   # -> http://localhost:4173
 ```
+
+Outros comandos: `npm test` (testes) e `npm run typecheck` (verifica os tipos — o build do Vite não o faz).
 
 Depois do `npm install` não é preciso internet.
 
@@ -124,13 +126,14 @@ Unidades que não completam um grupo pagam o `valor` normal. Os cálculos são f
 
 ```
 src/
-  db/database.js   dados em memória + persistência IndexedDB + normalização (schema)
-  db/repo.js       produtos, núcleos, vendas
-  db/useDb.js      hook React que re-executa queries quando a BD muda
-  lib/cartStore.js     carrinho em curso (zustand, guardado em localStorage)
-  lib/sessionStore.js  Atividade e Responsável (zustand, guardado em localStorage)
-  lib/pricing.js   motor de promoções
-  lib/csv.js       importação/exportação CSV
+  types.ts         tipos centrais (Product, Transaction, Sale, DbState…)
+  db/database.ts   dados em memória + persistência IndexedDB + normalização (schema)
+  db/repo.ts       produtos, núcleos, categorias, vendas
+  db/useDb.ts      hook React que re-executa queries quando a BD muda
+  lib/cartStore.ts     carrinho em curso (zustand, guardado em localStorage)
+  lib/sessionStore.ts  Atividade e Responsável (zustand, guardado em localStorage)
+  lib/pricing.ts   motor de promoções
+  lib/csv.ts       importação/exportação CSV
   pages/           Vender, Produtos, Vendas, Config
 tests/             testes (npm test)
 ```
