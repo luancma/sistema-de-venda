@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup — peças por SKU</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" />
+<style>
+  @font-face { font-family: 'Press Start 2P'; src: url('../../../node_modules/@fontsource/press-start-2p/files/press-start-2p-latin-400-normal.woff2') format('woff2'); }
+  :root {
+    --navy: #1f2a5c; --navy-deep: #18224d; --navy-light: #2b3a78; --line: #c8cbd8; --yellow: #f7df45;
+    --orange: #f2a33a; --green: #3fc43f; --pink: #d65fd6; --slate: #8b90a8; --text: #e8eaf2; --muted: #9aa1bb; --border: #4a5690;
+  }
+  * { box-sizing: border-box; font-family: 'Press Start 2P', monospace; }
+  body { margin: 0; background: #0e1430; color: var(--text); padding: 24px; word-spacing: -0.2em; }
+  h1 { font-size: 14px; color: var(--yellow); margin: 0 0 6px; }
+  .lead { font-size: 9px; color: var(--muted); margin: 0 0 24px; line-height: 1.7; }
+  .screens { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+  .screen { flex: none; }
+  .screen > h2 { font-size: 10px; color: var(--line); margin: 0 0 10px; }
+  .screen > p { font-size: 8px; color: var(--muted); margin: 8px 0 0; line-height: 1.7; max-width: 375px; }
+
+  /* moldura de telemóvel */
+  .phone { width: 375px; background: var(--navy); border: 2px solid #3a467e; border-radius: 22px; overflow: hidden; position: relative; }
+  .desktop { width: 1024px; background: var(--navy); border: 2px solid #3a467e; border-radius: 8px; overflow: hidden; position: relative; }
+
+  /* topo */
+  .top { padding: 14px 14px 8px; border-bottom: 2px solid var(--line); }
+  .brand { color: var(--yellow); font-size: 15px; }
+  .ok { color: var(--green); font-size: 8px; margin-left: 8px; }
+  .sess { font-size: 8px; color: var(--muted); margin-top: 8px; line-height: 1.9; }
+  .sess b { color: var(--text); font-weight: 400; }
+  .deskTop { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px 8px; }
+  .tabs { display: flex; gap: 6px; padding: 0 24px 10px; font-size: 10px; }
+  .tabs span { padding: 6px 8px; }
+  .tabs .on { background: var(--yellow); color: var(--navy-deep); }
+
+  main { padding: 14px; }
+  .desktop main { padding: 20px 24px; }
+  .searchRow { display: flex; gap: 8px; margin-bottom: 14px; }
+  .search { flex: 1; border: 2px solid var(--line); background: var(--navy-deep); color: #7480a6; font-size: 10px; padding: 11px 10px; }
+  .fbtn { border: 2px solid var(--line); font-size: 9px; padding: 10px 8px; white-space: nowrap; }
+
+  /* cartão de peça */
+  .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .desktop .grid { grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .piece { border: 2px solid var(--border); padding: 10px; position: relative; }
+  .piece.inCart { border-color: var(--yellow); }
+  .pname { font-size: 10px; line-height: 1.5; }
+  .pname .cor { color: var(--slate); }
+  .prow { display: flex; align-items: center; justify-content: space-between; margin: 8px 0 10px; gap: 8px; flex-wrap: wrap; }
+  .price { color: var(--orange); font-size: 11px; }
+  .badge { background: var(--orange); color: var(--navy-deep); font-size: 7px; padding: 3px 5px; }
+  .stock { font-size: 7px; color: var(--muted); }
+  .count { position: absolute; top: -9px; right: -9px; background: var(--yellow); color: var(--navy-deep); font-size: 9px; min-width: 20px; height: 20px; display: grid; place-items: center; }
+  .sizes { display: flex; flex-wrap: wrap; gap: 8px; }
+  .size { border: 2px solid var(--line); min-width: 58px; min-height: 44px; padding: 8px 6px 6px; text-align: center; font-size: 10px; line-height: 1.6; position: relative; } /* área de toque ≥ 44px */
+  .size small { display: block; font-size: 7px; color: var(--muted); }
+  .size.sel { border-color: var(--yellow); background: var(--navy-light); }
+  .size.sel small { color: var(--yellow); }
+  .size.out { opacity: .4; border-style: dashed; }
+  .size .q { position: absolute; top: -8px; right: -8px; background: var(--yellow); color: var(--navy-deep); font-size: 7px; min-width: 15px; height: 15px; display: grid; place-items: center; }
+  .single { font-size: 7px; color: var(--muted); margin-top: 2px; }
+  .tapHint { font-size: 7px; color: var(--slate); margin-top: 6px; }
+
+  /* carrinho (resumo) */
+  .cart { border: 4px double var(--yellow); margin-top: 18px; padding: 16px 10px 10px; position: relative; }
+  .cart h3 { position: absolute; top: -9px; left: 10px; margin: 0; background: var(--navy); color: var(--yellow); font-size: 10px; padding: 0 6px; font-weight: 400; }
+  .line { border-bottom: 2px dotted var(--border); padding: 8px 0; font-size: 9px; }
+  .line .t { display: flex; justify-content: space-between; gap: 8px; }
+  .line .m { color: var(--slate); }
+  .tot { display: flex; justify-content: space-between; margin-top: 10px; font-size: 13px; color: var(--yellow); }
+  .promo { font-size: 8px; color: var(--muted); text-align: right; margin-top: 8px; }
+
+  /* lista de produtos */
+  .panel { border: 2px solid var(--line); padding: 18px 10px 10px; position: relative; margin-top: 10px; }
+  .panel > h3 { position: absolute; top: -9px; left: 10px; margin: 0; background: var(--navy); font-size: 10px; padding: 0 6px; font-weight: 400; }
+  .prodRow { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; padding: 10px 0; border-bottom: 2px dotted var(--border); align-items: start; }
+  .chk { width: 14px; height: 14px; border: 2px solid var(--line); margin-top: 1px; }
+  .chk.on { background: var(--yellow); border-color: var(--yellow); }
+  .prodRow .nm { font-size: 9px; line-height: 1.5; }
+  .prodRow .sk { font-size: 7px; color: var(--slate); margin-top: 3px; }
+  .prodRow .sz { font-size: 8px; margin-top: 6px; line-height: 1.8; color: var(--text); }
+  .prodRow .sz .z { color: var(--pink); }
+  .prodRow .sz .tt { color: var(--yellow); }
+  .prodRow .rt { text-align: right; font-size: 9px; }
+  .prodRow .rt .price { font-size: 9px; }
+  .ed { border: 2px solid var(--line); font-size: 7px; padding: 5px 6px; display: inline-block; margin-top: 6px; }
+  .tag { display: inline-block; font-size: 6px; padding: 2px 3px; border: 1px solid var(--slate); color: var(--slate); margin-top: 5px; }
+  .batchBar { display: flex; justify-content: space-between; align-items: center; background: var(--navy-deep); border: 2px solid var(--yellow); padding: 8px; font-size: 8px; margin-bottom: 6px; }
+  .batchBar span:last-child { background: var(--yellow); color: var(--navy-deep); padding: 5px 6px; }
+
+  /* formulário */
+  .modal { background: var(--navy); border: 2px solid var(--line); margin: 12px; padding: 12px; }
+  .modal h3 { margin: 0 0 12px; font-size: 10px; color: var(--yellow); border-bottom: 2px solid var(--yellow); padding-bottom: 8px; font-weight: 400; }
+  .lbl { font-size: 8px; margin: 10px 0 5px; }
+  .lbl i { font-style: normal; color: var(--muted); font-size: 7px; }
+  .inp { border: 2px solid var(--border); background: var(--navy-deep); font-size: 9px; padding: 8px; min-height: 30px; }
+  .inp.ph { color: #7480a6; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .chipsel { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 2px; }
+  .chipsel span { background: var(--yellow); color: var(--navy-deep); font-size: 7px; padding: 5px 6px; }
+  .sizeTable { margin-top: 6px; }
+  .sizeHead, .sizeRow { display: grid; grid-template-columns: 54px 44px 36px 1fr 22px; gap: 5px; align-items: center; }
+  .sizeHead { font-size: 6px; color: var(--muted); padding-bottom: 4px; }
+  .sizeRow { margin-bottom: 5px; }
+  .sizeRow .inp { padding: 6px 5px; min-height: 26px; font-size: 8px; }
+  .sizeRow .sku { font-size: 6px; color: var(--slate); }
+  .tg { width: 30px; height: 15px; border: 2px solid var(--line); position: relative; }
+  .tg::after { content: ''; position: absolute; top: 2px; left: 2px; width: 7px; height: 7px; background: var(--line); }
+  .tg.on { border-color: var(--yellow); }
+  .tg.on::after { left: 17px; background: var(--yellow); }
+  .trash { color: var(--pink); font-size: 10px; text-align: center; }
+  .quick { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
+  .quick b { font-weight: 400; font-size: 7px; color: var(--muted); margin-right: 2px; }
+  .quick span { border: 2px solid var(--border); font-size: 7px; padding: 4px 5px; }
+  .quick span.add { border-color: var(--line); }
+  .quick span.used { opacity: .35; }
+  .actions { display: flex; justify-content: space-between; gap: 6px; margin-top: 14px; font-size: 8px; }
+  .actions span { border: 2px solid var(--line); padding: 7px 6px; }
+  .actions .del { border-color: var(--pink); color: var(--pink); }
+  .actions .save { background: var(--yellow); color: var(--navy-deep); border-color: var(--yellow); }
+  .note { font-size: 7px; color: var(--muted); margin-top: 4px; line-height: 1.6; }
+  .drawerWrap { display: grid; grid-template-columns: 1fr; }
+</style>
+</head>
+<body>
+  <h1>Mockup — peças por SKU (branch csv-sku)</h1>
+  <p class="lead">Dados do CSV de exemplo (+ alguns tamanhos a mais na Amílcar só para ilustrar). Promoção "2 por 1" na Camiseta Olga e na Camiseta Amílcar.<br>Não é a app a funcionar: é um desenho com o mesmo estilo para validar o layout.</p>
+
+  <div class="screens">
+
+    <!-- 1. VENDER — TELEMÓVEL -->
+    <section class="screen">
+      <h2>1 · Vender (telemóvel)</h2>
+      <div class="phone">
+        <div class="top">
+          <span class="brand">Loja</span><span class="ok">✓ offline</span>
+          <div class="sess">Atividade: <b>Feira de outubro</b><br>Responsável: <b>Rui</b></div>
+        </div>
+        <main>
+          <div class="searchRow"><div class="search">Procurar produto…</div><div class="fbtn">⧩ Filtros</div></div>
+          <div class="grid">
+            <div class="piece inCart">
+              <span class="count">2</span>
+              <div class="pname">Camiseta Olga</div>
+              <div class="prow"><span class="price">15,00 €</span><span class="badge">2 por 1</span><span class="stock">Stock: 8</span></div>
+              <div class="sizes">
+                <div class="size sel"><span class="q">1</span>2XL<small>5</small></div>
+                <div class="size sel"><span class="q">1</span>3XL<small>3</small></div>
+              </div>
+            </div>
+            <div class="piece">
+              <div class="pname">Camiseta Amílcar <span class="cor">· Verde</span></div>
+              <div class="prow"><span class="price">15,00 €</span><span class="badge">2 por 1</span><span class="stock">Stock: 9</span></div>
+              <div class="sizes">
+                <div class="size out">XS<small>0</small></div>
+                <div class="size">S<small>5</small></div>
+                <div class="size">M<small>4</small></div>
+              </div>
+            </div>
+            <div class="piece">
+              <div class="pname">Camiseta Amílcar <span class="cor">· Preta</span></div>
+              <div class="prow"><span class="price">15,00 €</span><span class="badge">2 por 1</span><span class="stock">Stock: 2</span></div>
+              <div class="sizes"><div class="size">XS<small>2</small></div></div>
+            </div>
+            <div class="piece">
+              <div class="pname">As maravilhas do capitalismo...</div>
+              <div class="prow"><span class="price">3,00 €</span><span class="stock">Stock: 1</span></div>
+              <div class="tapHint">tamanho único — toca no cartão</div>
+            </div>
+          </div>
+
+          <div class="cart">
+            <h3>Carrinho</h3>
+            <div class="line"><div class="t"><span>Camiseta Olga <span class="m">· 2XL</span></span><span>15,00 €</span></div></div>
+            <div class="line"><div class="t"><span>Camiseta Olga <span class="m">· 3XL</span></span><span>0,00 €</span></div><span class="badge">2 por 1 −15,00 €</span></div>
+            <div class="promo">Promoções: −15,00 €</div>
+            <div class="tot"><span>Total</span><span>15,00 €</span></div>
+          </div>
+        </main>
+      </div>
+      <p>Cada peça (SKU_PAI) é um cartão; cada tamanho é um botão com o stock. Tocar no tamanho junta 1 ao carrinho (fica amarelo, com a quantidade). Esgotado fica tracejado/esbatido. O "2 por 1" conta 2XL + 3XL juntos — e contaria também Amílcar Verde + Preta (mesmo nome de produto).</p>
+    </section>
+
+    <!-- 2. PRODUTOS — TELEMÓVEL -->
+    <section class="screen">
+      <h2>2 · Produtos (telemóvel)</h2>
+      <div class="phone">
+        <div class="top">
+          <span class="brand">Loja</span><span class="ok">✓ offline</span>
+          <div class="sess">Atividade: <b>Feira de outubro</b><br>Responsável: <b>Rui</b></div>
+        </div>
+        <main>
+          <div class="searchRow"><div class="search">Filtrar…</div><div class="fbtn">⧩ Filtros</div></div>
+          <div class="batchBar"><span>2 peças selecionadas (4 tamanhos)</span><span>Editar em lote</span></div>
+          <div class="panel">
+            <h3>Produtos (5 peças · 6 artigos)</h3>
+            <div class="prodRow">
+              <div class="chk on"></div>
+              <div><div class="nm">Camiseta Olga</div><div class="sk">CAM-OLG</div>
+                <div class="sz">2XL 5 · 3XL 3 · <span class="tt">Total 8</span></div>
+                <span class="tag">CAMISETA</span></div>
+              <div class="rt"><span class="price">15,00 €</span><br><span class="badge">2 por 1</span><br><span class="ed">Editar</span></div>
+            </div>
+            <div class="prodRow">
+              <div class="chk on"></div>
+              <div><div class="nm">Camiseta Amílcar <span style="color:var(--slate)">· Verde</span></div><div class="sk">CAM-AML-VD</div>
+                <div class="sz"><span class="z">XS 0</span> · S 5 · M 4 · <span class="tt">Total 9</span></div>
+                <span class="tag">CAMISETA</span></div>
+              <div class="rt"><span class="price">15,00 €</span><br><span class="badge">2 por 1</span><br><span class="ed">Editar</span></div>
+            </div>
+            <div class="prodRow">
+              <div class="chk"></div>
+              <div><div class="nm">Camiseta Amílcar <span style="color:var(--slate)">· Preta</span></div><div class="sk">CAM-AML-PR</div>
+                <div class="sz">XS 2 · <span class="tt">Total 2</span></div>
+                <span class="tag">CAMISETA</span></div>
+              <div class="rt"><span class="price">15,00 €</span><br><span class="badge">2 por 1</span><br><span class="ed">Editar</span></div>
+            </div>
+            <div class="prodRow">
+              <div class="chk"></div>
+              <div><div class="nm">Camiseta Fidel</div><div class="sk">CAM-FID</div>
+                <div class="sz">S 7 · <span class="tt">Total 7</span></div>
+                <span class="tag">CAMISETA</span></div>
+              <div class="rt"><span class="price">15,00 €</span><br><span class="ed">Editar</span></div>
+            </div>
+            <div class="prodRow">
+              <div class="chk"></div>
+              <div><div class="nm">As maravilhas do capitalismo...</div><div class="sk">LIV-CAP-01</div>
+                <div class="sz">Único 1</div>
+                <span class="tag">LIVRO</span></div>
+              <div class="rt"><span class="price">3,00 €</span><br><span class="ed">Editar</span></div>
+            </div>
+          </div>
+        </main>
+      </div>
+      <p>Uma linha por peça com o stock de cada tamanho e o total — a resposta direta a "quanto tenho desta camiseta?". Tamanho esgotado a rosa. Marcar uma peça leva todos os tamanhos para a edição em lote.</p>
+    </section>
+
+    <!-- 3. FORMULÁRIO DE PEÇA — TELEMÓVEL -->
+    <section class="screen">
+      <h2>3 · Editar / nova peça (telemóvel)</h2>
+      <div class="phone">
+        <div class="modal">
+          <h3>Editar peça</h3>
+          <div class="two">
+            <div><div class="lbl">Nome</div><div class="inp">Camiseta Amílcar</div></div>
+            <div><div class="lbl">Cor <i>opcional</i></div><div class="inp">Verde</div></div>
+          </div>
+          <div class="lbl">SKU da peça <i>gerado, editável</i></div><div class="inp">CAM-AML-VD</div>
+          <div class="two">
+            <div><div class="lbl">Valor (€)</div><div class="inp">15,00</div></div>
+            <div><div class="lbl">Preço especial</div><div class="inp ph">—</div></div>
+          </div>
+          <div class="lbl">Promoção</div><div class="inp">2 por 1 ▾</div>
+          <div class="lbl">Categorias</div><div class="chipsel"><span>CAMISETA 🗑</span></div>
+          <div class="lbl">Caixa</div><div class="inp">PORTUGAL</div>
+
+          <div class="lbl">Tamanhos</div>
+          <div class="sizeTable">
+            <div class="sizeHead"><span>Tamanho</span><span>Qtd</span><span>Sem lim.</span><span>SKU</span><span></span></div>
+            <div class="sizeRow"><div class="inp">XS</div><div class="inp">0</div><div class="tg"></div><div class="sku">CAM-AML-VD-XS</div><div class="trash">🗑</div></div>
+            <div class="sizeRow"><div class="inp">S</div><div class="inp">5</div><div class="tg"></div><div class="sku">CAM-AML-VD-S</div><div class="trash">🗑</div></div>
+            <div class="sizeRow"><div class="inp">M</div><div class="inp">4</div><div class="tg"></div><div class="sku">CAM-AML-VD-M</div><div class="trash">🗑</div></div>
+          </div>
+          <div class="quick"><b>Juntar:</b><span class="used">XS</span><span class="used">S</span><span class="used">M</span><span>L</span><span>XL</span><span>2XL</span><span>3XL</span><span class="add">+ outro</span></div>
+          <div class="note">Os dados de cima valem para todos os tamanhos. Preços diferentes por tamanho: liga-se uma coluna "Valor" (aparece sozinha se a peça já os tiver).</div>
+          <div class="actions"><span class="del">🗑 Apagar peça</span><span>Cancelar</span><span class="save">▸ GUARDAR</span></div>
+        </div>
+      </div>
+      <p>A mesma janela cria uma peça nova (com uma linha "Único" por defeito) ou edita uma existente. Os SKUs dos tamanhos novos geram-se do SKU da peça; o SKU aparece pequeno por baixo — toca para editar.</p>
+    </section>
+
+    <!-- 4. VENDER — COMPUTADOR -->
+    <section class="screen">
+      <h2>4 · Vender (computador, área de 1024px)</h2>
+      <div class="desktop">
+        <div class="deskTop">
+          <span><span class="brand">Loja</span><span class="ok">✓ offline</span></span>
+          <span class="sess" style="margin:0">Atividade: <b>Feira de outubro</b> &nbsp; Responsável: <b>Rui</b></span>
+        </div>
+        <div class="tabs"><span class="on">▶Vender <span style="background:var(--pink);padding:0 4px">2</span></span><span>Produtos</span><span>Vendas do dia</span><span>Configurações</span></div>
+        <div style="border-top:2px solid var(--line)"></div>
+        <main>
+          <div class="searchRow"><div class="search">Procurar produto…</div><div class="fbtn">⧩ Filtros</div></div>
+          <div class="grid">
+            <div class="piece inCart">
+              <span class="count">2</span>
+              <div class="pname">Camiseta Olga</div>
+              <div class="prow"><span class="price">15,00 €</span><span class="badge">2 por 1</span><span class="stock">Stock: 8</span></div>
+              <div class="sizes">
+                <div class="size sel"><span class="q">1</span>2XL<small>5</small></div>
+                <div class="size sel"><span class="q">1</span>3XL<small>3</small></div>
+              </div>
+            </div>
+            <div class="piece">
+              <div class="pname">Camiseta Amílcar <span class="cor">· Verde</span></div>
+              <div class="prow"><span class="price">15,00 €</span><span class="badge">2 por 1</span><span class="stock">Stock: 9</span></div>
+              <div class="sizes">
+                <div class="size out">XS<small>0</small></div>
+                <div class="size">S<small>5</small></div>
+                <div class="size">M<small>4</small></div>
+              </div>
+            </div>
+            <div class="piece">
+              <div class="pname">Camiseta Amílcar <span class="cor">· Preta</span></div>
+              <div class="prow"><span class="price">15,00 €</span><span class="badge">2 por 1</span><span class="stock">Stock: 2</span></div>
+              <div class="sizes"><div class="size">XS<small>2</small></div></div>
+            </div>
+            <div class="piece">
+              <div class="pname">Camiseta Fidel</div>
+              <div class="prow"><span class="price">15,00 €</span><span class="stock">Stock: 7</span></div>
+              <div class="sizes"><div class="size">S<small>7</small></div></div>
+            </div>
+            <div class="piece">
+              <div class="pname">As maravilhas do capitalismo...</div>
+              <div class="prow"><span class="price">3,00 €</span><span class="stock">Stock: 1</span></div>
+              <div class="tapHint">tamanho único — toca no cartão</div>
+            </div>
+          </div>
+          <div style="height:60px"></div>
+          <div style="position:absolute;right:24px;bottom:18px;background:var(--yellow);color:var(--navy-deep);font-size:10px;padding:10px 12px">🛒 Carrinho <span style="background:var(--pink);padding:2px 5px">2</span> 15,00 €</div>
+        </main>
+      </div>
+      <p>No computador o catálogo usa 3 colunas dentro da área de 1024px; o carrinho continua no painel lateral (botão amarelo).</p>
+    </section>
+
+  </div>
+</body>
+</html>

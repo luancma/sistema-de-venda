@@ -214,3 +214,77 @@ export function allocateDiscount(lineTotals: number[], desconto: number): number
     .forEach(([, i]) => { if (rest > 0 && parts[i] < cents[i]) { parts[i]++; rest-- } })
   return parts.map(fromCents)
 }
+
+// ---------------------------------------------------------------------------
+// Carrinho inteiro: as promoções contam o produto (mesmo nome + mesma promoção),
+// juntando tamanhos e cores — ex.: Olga 2XL + Olga 3XL em "2 por 1".
+// ---------------------------------------------------------------------------
+
+/** Uma linha do carrinho para o cálculo de preços. */
+export interface CartItem extends PriceInput {
+  nome: string
+  quantidade: number
+}
+
+/** nome sem acentos nem maiúsculas: "Camiseta Olga" e "camiseta olga" são o mesmo produto */
+const chaveNome = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+
+/** reparte `total` cêntimos proporcionalmente aos pesos (a soma bate certo) */
+function splitCents(total: number, weights: number[]): number[] {
+  const sum = weights.reduce((a, b) => a + b, 0)
+  const raw = weights.map((w) => (sum ? (total * w) / sum : total / weights.length))
+  const parts = raw.map(Math.floor)
+  let rest = total - parts.reduce((a, b) => a + b, 0)
+  raw.map((r, i): [number, number] => [r - Math.floor(r), i]).sort((a, b) => b[0] - a[0])
+    .forEach(([, i]) => { if (rest > 0) { parts[i]++; rest-- } })
+  return parts
+}
+
+/**
+ * Preço de cada linha do carrinho (mesma ordem que `items`).
+ * Linhas com o mesmo nome e a mesma promoção formam um grupo:
+ *  - "Leve N, pague M": por cada N unidades do grupo, N−M ficam grátis — as mais baratas;
+ *  - "Pack N": cada N unidades custam o preço especial — os packs formam-se com as mais caras.
+ * Sem promoção (ou pack sem preço especial) calcula-se linha a linha, como em `priceLine`.
+ */
+export function priceCart(items: CartItem[]): LinePrice[] {
+  const out = items.map((it) => priceLine(it, it.quantidade))
+  const groups = new Map<string, number[]>()
+  items.forEach((it, i) => {
+    const promo = parsePromo(it.promocao)
+    const hasEspecial = it.preco_especial != null && it.preco_especial !== ''
+    if (!promo || (promo.type === 'PACK' && !hasEspecial)) return
+    const key = `${chaveNome(it.nome)}|${String(it.promocao).trim().toUpperCase()}|${hasEspecial ? toCents(it.preco_especial) : ''}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(i)
+  })
+
+  for (const idxs of groups.values()) {
+    const promo = parsePromo(items[idxs[0]].promocao)!
+    // uma entrada por unidade: [linha, preço em cêntimos]
+    const units = idxs.flatMap((i) =>
+      Array.from({ length: Math.max(0, Math.floor(Number(items[i].quantidade) || 0)) }, (): [number, number] => [i, toCents(items[i].valor)]))
+    const desc = new Map<number, number>(idxs.map((i) => [i, 0])) // desconto por linha, em cêntimos
+    if (promo.type === 'LEVE') {
+      const livres = Math.floor(units.length / promo.leve) * (promo.leve - promo.pague)
+      // as mais baratas primeiro (empate: a linha mais abaixo no carrinho)
+      units.sort((a, b) => a[1] - b[1] || b[0] - a[0])
+      units.slice(0, livres).forEach(([i, c]) => desc.set(i, desc.get(i)! + c))
+    } else {
+      const especial = toCents(items[idxs[0]].preco_especial)
+      // as mais caras primeiro (empate: a linha mais acima)
+      units.sort((a, b) => b[1] - a[1] || a[0] - b[0])
+      for (let k = 0; k + promo.n <= units.length; k += promo.n) {
+        const pack = units.slice(k, k + promo.n)
+        const shares = splitCents(especial, pack.map(([, c]) => c))
+        pack.forEach(([i, c], j) => desc.set(i, desc.get(i)! + c - shares[j]))
+      }
+    }
+    for (const i of idxs) {
+      const q = Math.max(0, Math.floor(Number(items[i].quantidade) || 0))
+      const bruto = toCents(items[i].valor) * q
+      out[i] = { unitario: fromCents(toCents(items[i].valor)), bruto: fromCents(bruto), total: fromCents(bruto - desc.get(i)!), desconto: fromCents(desc.get(i)!) }
+    }
+  }
+  return out
+}

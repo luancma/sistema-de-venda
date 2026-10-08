@@ -2,18 +2,18 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '../db/useDb.ts'
 import { listProducts, listNucleos, registerSale } from '../db/repo.ts'
 import DiscountBox from '../components/DiscountBox.tsx'
-import { priceLine, promoLabel, formatEuro, saleDiscount } from '../lib/pricing.ts'
+import { priceCart, promoLabel, formatEuro, saleDiscount } from '../lib/pricing.ts'
 import { useToast } from '../components/Toast.tsx'
 import { useConfirm } from '../components/ConfirmProvider.tsx'
 import { useCart } from '../lib/cartStore.ts'
 import { useSessao, nomeValido } from '../lib/sessionStore.ts'
-import { faltaStock, esgotado } from '../lib/stock.ts'
-import StockValue from '../components/StockValue.tsx'
+import { faltaStock } from '../lib/stock.ts'
+import { groupPieces, rotuloArtigo } from '../lib/pieces.ts'
+import PieceCard from '../components/PieceCard.tsx'
 import NucleosModal from '../components/NucleosModal.tsx'
 import ConfirmModal from '../components/ConfirmModal.tsx'
 import QtyInput from '../components/QtyInput.tsx'
 import CategoryFilter from '../components/CategoryFilter.tsx'
-import { matchesCategorias } from '../lib/categorias.ts'
 import TrashIcon from '../components/TrashIcon.tsx'
 import { errorMessage } from '../lib/errors.ts'
 import type { LinePrice } from '../lib/pricing.ts'
@@ -55,12 +55,17 @@ export default function Vender({ goTo }: PageProps) {
   const byId = useMemo<Record<string, Product>>(() => Object.fromEntries(products.map((p) => [p.id, p])), [products])
   const filtered = useMemo(() => {
     const q = norm(search.trim())
-    return products.filter((p) => matchesCategorias(p, cats) && (!q || norm(`${p.nome} ${p.tamanho}`).includes(q)))
+    // peças: pesquisa no nome, cor e SKUs; filtro pelas categorias de qualquer tamanho da peça
+    return groupPieces(products).filter((pc) =>
+      cats.every((c) => pc.categorias.includes(c)) &&
+      (!q || norm([pc.nome, pc.cor, pc.sku_pai, ...pc.variants.map((v) => v.sku)].join(' ')).includes(q)))
   }, [products, search, cats])
 
-  const lines: CartLine[] = Object.entries(cart)
+  const cartItems = Object.entries(cart)
     .filter(([id]) => byId[id])
-    .map(([id, q]) => ({ product: byId[id], quantidade: q, ...priceLine(byId[id], q) }))
+  // promoções contam o produto inteiro (ex.: 2XL + 3XL da mesma camiseta em "2 por 1")
+  const cartPrices = priceCart(cartItems.map(([id, q]) => ({ ...byId[id], quantidade: q })))
+  const lines: CartLine[] = cartItems.map(([id, q], i) => ({ product: byId[id], quantidade: q, ...cartPrices[i] }))
   const total = lines.reduce((s, l) => s + l.total, 0)
   const semStock = lines.filter((l) => faltaStock(l.product, l.quantidade))
   const desconto = lines.reduce((s, l) => s + l.desconto, 0) // promoções dos produtos
@@ -68,7 +73,7 @@ export default function Vender({ goTo }: PageProps) {
 
   const add = (p: Product) => {
     const q = (cart[p.id] || 0) + 1
-    if (faltaStock(p, q)) toast(`Atenção: só há ${p.qtd} em stock de ${p.nome} ${p.tamanho}`, 'warn')
+    if (faltaStock(p, q)) toast(`Atenção: só há ${p.qtd} em stock de ${rotuloArtigo(p)}`, 'warn')
     setQty(p.id, q)
   }
 
@@ -129,20 +134,8 @@ export default function Vender({ goTo }: PageProps) {
           />
           <CategoryFilter products={products} selected={cats} onChange={setCats} />
         </div>
-        <div className="grid">
-          {filtered.map((p) => {
-            const promo = promoLabel(p)
-            return (
-              <button key={p.id} className={`card ${esgotado(p) ? 'out' : ''} ${cart[p.id] ? 'in-cart' : ''}`} onClick={() => add(p)}>
-                <span className="card-name">{p.nome}</span>
-                {p.tamanho && <span className="card-size">{p.tamanho}</span>}
-                <span className="card-price">{p.valor > 0 ? formatEuro(p.valor) : <span className="badge warn">Sem preço</span>}</span>
-                {promo && <span className="badge">{promo}</span>}
-                <span className="card-stock">Stock: <StockValue product={p} /></span>
-                {cart[p.id] > 0 && <span className="card-count">{cart[p.id]}</span>}
-              </button>
-            )
-          })}
+        <div className="grid pieces">
+          {filtered.map((pc) => <PieceCard key={pc.sku_pai} piece={pc} cart={cart} onAdd={add} />)}
           {!filtered.length && <p className="muted">Nenhum produto encontrado.</p>}
         </div>
       </section>
@@ -185,7 +178,7 @@ export default function Vender({ goTo }: PageProps) {
           {lines.map((l) => (
             <li key={l.product.id} className={faltaStock(l.product, l.quantidade) ? 'no-stock' : ''}>
               <div className="line-info">
-                <strong>{l.product.nome}</strong> {l.product.tamanho && <span className="muted">· {l.product.tamanho}</span>}
+                <strong>{l.product.nome}</strong>{[l.product.cor, l.product.tamanho].filter(Boolean).map((x) => <span key={x} className="muted"> · {x}</span>)}
                 {faltaStock(l.product, l.quantidade) && (
                   <div className="stock-alert">
                     {l.product.qtd <= 0 ? 'Sem stock' : `Só há ${l.product.qtd} em stock`}

@@ -1,15 +1,19 @@
 import { db, write, uuid, normalizeProduct, normalizeTransaction } from './database.ts'
-import { priceLine, saleDiscount, allocateDiscount, formatEuro } from '../lib/pricing.ts'
+import { priceCart, saleDiscount, allocateDiscount, formatEuro } from '../lib/pricing.ts'
 import { parseCategorias, joinCategorias, replaceCategoria, countCategorias } from '../lib/categorias.ts'
 import { stockIlimitado, faltaStock } from '../lib/stock.ts'
+import { normTamanho, compareSizes, rotuloArtigo } from '../lib/pieces.ts'
 import type { SaleDiscount } from '../lib/pricing.ts'
 import type { DiscountMode, Product, Transaction } from '../types.ts'
 
 /** O que se pode gravar como produto (do formulário ou do CSV): números podem vir como texto. */
 export interface ProductInput {
   id?: string
+  sku?: string
+  sku_pai?: string
   nome: string
-  qtd: number | string
+  cor?: string
+  qtd?: number | string
   tamanho?: string
   valor: number | string | null
   promocao?: string | null
@@ -34,7 +38,6 @@ export interface SaleInput {
 
 // ordem alfabética sem distinguir maiúsculas/minúsculas (como o antigo COLLATE NOCASE)
 const cmp = (a: unknown, b: unknown) => String(a).localeCompare(String(b), 'pt', { sensitivity: 'base' })
-const sameText = (a: unknown, b: unknown) => String(a).toLowerCase() === String(b).toLowerCase()
 // cópias: quem lê não altera os dados guardados por engano
 const copy = <T extends object>(rows: T[]): T[] => rows.map((r) => ({ ...r }))
 
@@ -48,7 +51,11 @@ const nullable = <T>(v: T | '' | undefined): T | null => (v === '' || v === unde
 const cats = (v: unknown) => joinCategorias(Array.isArray(v) ? v : parseCategorias(v))
 
 const productFields = (p: ProductInput) => ({
+  // SKUs sempre em maiúsculas: "cam-olg-s" e "CAM-OLG-S" são o mesmo artigo
+  sku: (p.sku || '').trim().toUpperCase(),
+  sku_pai: (p.sku_pai || '').trim().toUpperCase(),
   nome: p.nome.trim(),
+  cor: (p.cor || '').trim(),
   qtd: Number(p.qtd) || 0,
   tamanho: (p.tamanho || '').trim(),
   valor: Number(p.valor) || 0,
@@ -80,7 +87,6 @@ export const deleteProduct = (id: string) =>
 
 /** Alterações em lote: só os campos definidos mudam; categorias juntam-se/tiram-se às de cada produto. */
 export interface ProductBatch {
-  qtd?: number
   valor?: number
   caixa_destino?: string
   promocao?: string | null
@@ -100,7 +106,6 @@ export const updateProducts = (ids: string[], ch: ProductBatch) =>
       const categorias = [...parseCategorias(p.categorias).filter((c) => !remove.has(c)), ...(ch.addCategorias ?? [])]
       Object.assign(p, normalizeProduct({
         ...p,
-        qtd: ch.qtd ?? p.qtd,
         valor: ch.valor ?? p.valor,
         caixa_destino: ch.caixa_destino ?? p.caixa_destino,
         promocao: ch.promocao !== undefined ? ch.promocao : p.promocao,
@@ -121,10 +126,76 @@ export const deleteProducts = (ids: string[]) =>
     return before - s.products.length
   })
 
+// ================= Peças (um SKU_PAI com os seus tamanhos) =================
+/** Uma peça e os seus tamanhos, como vêm do formulário de peça. */
+export interface PieceInput {
+  sku_pai: string
+  nome: string
+  cor: string
+  valor: number
+  /** promoção, preço especial e caixa: undefined = cada tamanho mantém o seu (os tamanhos novos ficam com os do 1.º) */
+  preco_especial?: number | null
+  promocao?: string | null
+  categorias: string[]
+  caixa_destino?: string
+  /** `id` = tamanho já existente; `valor` = preço próprio deste tamanho (senão o da peça) */
+  variants: { id?: string; sku: string; tamanho: string; qtd: number; sem_limite: boolean; valor?: number }[]
+}
+
+/**
+ * Grava uma peça inteira numa só transação: atualiza os tamanhos existentes, cria os novos e,
+ * ao editar (`originalSkuPai`), apaga os tamanhos da peça que já não vêm. Os SKUs têm de ser únicos.
+ */
+export const savePiece = (piece: PieceInput, originalSkuPai?: string) =>
+  write((s) => {
+    const skuPai = piece.sku_pai.trim().toUpperCase()
+    const antigos = originalSkuPai ? s.products.filter((p) => p.sku_pai === originalSkuPai.toUpperCase()) : []
+    // só os tamanhos desta peça contam como existentes (um id de outra peça é ignorado: nunca a move para aqui)
+    const ids = new Set(piece.variants.map((v) => v.id).filter((id) => antigos.some((p) => p.id === id)))
+    // os SKUs de fora desta peça (os tamanhos que vão ser apagados também deixam de contar)
+    const outros = new Set(s.products.filter((p) => !antigos.includes(p)).map((p) => p.sku))
+    // o SKU da peça também não pode ser de outra peça (senão os tamanhos das duas misturavam-se)
+    if (s.products.some((p) => !antigos.includes(p) && p.sku_pai === skuPai)) {
+      throw new Error(`SKU da peça repetido: ${skuPai}`)
+    }
+    const vistos = new Set<string>()
+    for (const v of piece.variants) {
+      const sku = v.sku.trim().toUpperCase()
+      if (!sku) throw new Error('Falta o SKU de um tamanho.')
+      if (vistos.has(sku) || outros.has(sku)) throw new Error(`SKU repetido: ${sku}`)
+      vistos.add(sku)
+    }
+    s.products = s.products.filter((p) => !antigos.includes(p) || ids.has(p.id))
+    const primeiro = [...antigos].sort((a, b) => compareSizes(a.tamanho, b.tamanho))[0]
+    for (const v of piece.variants) {
+      const existing = v.id && ids.has(v.id) ? findProduct(v.id) : null
+      const ref = existing ?? primeiro // de onde vêm os valores "a manter"
+      const fields = productFields({
+        sku: v.sku, sku_pai: piece.sku_pai, nome: piece.nome, cor: piece.cor, tamanho: normTamanho(v.tamanho),
+        qtd: v.qtd, sem_limite: v.sem_limite, valor: v.valor ?? piece.valor,
+        preco_especial: piece.preco_especial !== undefined ? piece.preco_especial : ref?.preco_especial ?? null,
+        promocao: piece.promocao !== undefined ? piece.promocao : ref?.promocao ?? null,
+        categorias: piece.categorias,
+        caixa_destino: piece.caixa_destino !== undefined ? piece.caixa_destino : ref?.caixa_destino ?? '',
+      })
+      if (!fields.caixa_destino) throw new Error('Falta a caixa de destino.') // obrigatória (desfaz tudo)
+      if (existing) Object.assign(existing, normalizeProduct({ id: existing.id, ...fields }))
+      else s.products.push(normalizeProduct({ id: uuid(), ...fields }))
+    }
+  })
+
+/** Apaga todos os tamanhos de uma peça (as vendas já feitas não mudam). @returns quantos artigos */
+export const deletePiece = (skuPai: string) =>
+  write((s) => {
+    const antes = s.products.length
+    s.products = s.products.filter((p) => p.sku_pai !== skuPai)
+    return antes - s.products.length
+  })
+
 /**
  * Importa produtos do CSV.
  *  mode 'replace' -> apaga todos os produtos e cria de novo (as vendas mantêm-se)
- *  mode 'merge'   -> produto com o mesmo NOME+TAMANHO é atualizado (qtd, valor e,
+ *  mode 'merge'   -> produto com o mesmo SKU_FILHO é atualizado (qtd, valor e,
  *                    se vierem no CSV, promoção/preço especial); os restantes são criados
  */
 export const importProducts = (products: ProductInput[], mode: 'replace' | 'merge' = 'replace') =>
@@ -135,12 +206,17 @@ export const importProducts = (products: ProductInput[], mode: 'replace' | 'merg
     for (const p of products) {
       const existing =
         mode === 'merge' &&
-        s.products.find((e) => sameText(e.nome, p.nome) && sameText(e.tamanho, p.tamanho || ''))
+        s.products.find((e) => e.sku === (p.sku || '').trim()) // o SKU_FILHO identifica o artigo
       if (existing) {
         const c = cats(p.categorias)
         Object.assign(existing, normalizeProduct({
           ...existing,
-          qtd: p.qtd,
+          // com o SKU como identidade, a folha manda no nome, cor, peça e tamanho
+          sku_pai: p.sku_pai ?? existing.sku_pai,
+          nome: p.nome,
+          cor: p.cor ?? existing.cor,
+          tamanho: p.tamanho ?? existing.tamanho,
+          qtd: p.qtd ?? existing.qtd,
           valor: p.valor,
           promocao: p.promocao ?? existing.promocao,
           preco_especial: p.preco_especial ?? existing.preco_especial,
@@ -216,16 +292,18 @@ export const registerSale = ({ items, nome, nucleo, responsavel, atividade = '',
     const vendaId = uuid()
     const data = new Date().toISOString()
 
-    // 1) preços de cada linha (com as promoções dos produtos)
-    const lines = items.map(({ productId, quantidade }) => {
+    // 1) preços de cada linha (com as promoções, que contam o produto inteiro)
+    const found = items.map(({ productId, quantidade }) => {
       const p = findProduct(productId)
       if (!p) throw new Error('Produto já não existe na base de dados.')
       if (faltaStock(p, quantidade)) {
-        if (!allowNegative) throw new Error(`Stock insuficiente: ${p.nome} ${p.tamanho} (restam ${p.qtd}).`)
+        if (!allowNegative) throw new Error(`Stock insuficiente: ${rotuloArtigo(p)} (restam ${p.qtd}).`)
         if (!observacao.trim()) throw new Error('Vender sem stock exige uma observação.')
       }
-      return { p, quantidade, price: priceLine(p, quantidade) }
+      return { p, quantidade }
     })
+    const prices = priceCart(found.map(({ p, quantidade }) => ({ ...p, quantidade })))
+    const lines = found.map((l, i) => ({ ...l, price: prices[i] }))
 
     // 2) desconto da venda
     const subtotal = lines.reduce((sum, l) => sum + l.price.total, 0)
@@ -239,7 +317,7 @@ export const registerSale = ({ items, nome, nucleo, responsavel, atividade = '',
     lines.forEach(({ p, quantidade, price }, i) => {
       const preco = Math.round((price.total - shares[i]) * 100) / 100
       s.transactions.push(normalizeTransaction({
-        id: uuid(), venda_id: vendaId, data, produto_id: p.id, nome_produto: p.nome, tamanho: p.tamanho,
+        id: uuid(), venda_id: vendaId, data, produto_id: p.id, sku: p.sku, sku_pai: p.sku_pai, nome_produto: p.nome, cor: p.cor, tamanho: p.tamanho,
         quantidade, preco_unitario: price.unitario, desconto: price.desconto, preco,
         promocao: p.promocao || (p.preco_especial != null ? 'PRECO_ESPECIAL' : null),
         nome: (nome || '').trim(), nucleo: nucleo || '', responsavel: (responsavel || '').trim(),

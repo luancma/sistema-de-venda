@@ -3,8 +3,10 @@ import { openDatabase, replaceDatabase, exportDatabase } from '../src/db/databas
 import {
   listProducts, saveProduct, deleteProduct, importProducts, listNucleos, addNucleo, deleteNucleo, renameNucleo, countNucleoVendas,
   registerSale, cancelSale, listTransactions, listAtividades, renameCategoria, removeCategoria, wipeData,
-  listCategorias, addCategorias, updateProducts, deleteProducts,
+  listCategorias, addCategorias, updateProducts, deleteProducts, savePiece, deletePiece, listProductIds, type PieceInput,
 } from '../src/db/repo.ts'
+import { useCart } from '../src/lib/cartStore.ts'
+import { parseProductsCsv } from '../src/lib/csv.ts'
 
 const today = () => new Date().toLocaleDateString('sv-SE')
 const json = (obj: unknown) => new TextEncoder().encode(JSON.stringify(obj))
@@ -35,17 +37,25 @@ describe('produtos', () => {
     expect(listProducts()[0].qtd).toBe(1)
   })
 
-  it('importa em modo merge por NOME+TAMANHO, mantendo promoção se não vier no CSV', async () => {
-    await importProducts([{ nome: 'T-shirt', qtd: 5, tamanho: 'M', valor: 10, promocao: 'LEVE_2_PAGUE_1', preco_especial: null }])
+  it('importa em modo merge por SKU_FILHO, mantendo promoção se não vier no CSV', async () => {
+    await importProducts([{ sku: 'TS-M', sku_pai: 'TS', nome: 'T-shirt', qtd: 5, tamanho: 'M', valor: 10, promocao: 'LEVE_2_PAGUE_1', preco_especial: null }])
     const r = await importProducts([
-      { nome: 't-shirt', qtd: 8, tamanho: 'm', valor: 12, promocao: null, preco_especial: null },
-      { nome: 'Caneca', qtd: 1, tamanho: '', valor: 4, promocao: null, preco_especial: null },
+      // o nome mudou na folha, mas o SKU é o mesmo: atualiza o mesmo artigo
+      { sku: 'TS-M', sku_pai: 'TS', nome: 'T-shirt Logo', qtd: 8, tamanho: 'M', valor: 12, promocao: null, preco_especial: null },
+      { sku: 'CAN', sku_pai: 'CAN', nome: 'Caneca', qtd: 1, tamanho: '', valor: 4, promocao: null, preco_especial: null },
     ], 'merge')
     expect(r).toEqual({ created: 1, updated: 1 })
-    const t = listProducts().find((p) => p.nome === 'T-shirt')
-    expect(t).toMatchObject({ qtd: 8, valor: 12, promocao: 'LEVE_2_PAGUE_1' })
-    await importProducts([{ nome: 'X', qtd: 1, valor: 1 }], 'replace')
+    const t = listProducts().find((p) => p.sku === 'TS-M')
+    expect(t).toMatchObject({ nome: 'T-shirt Logo', qtd: 8, valor: 12, promocao: 'LEVE_2_PAGUE_1' })
+    await importProducts([{ sku: 'X', sku_pai: 'X', nome: 'X', qtd: 1, valor: 1 }], 'replace')
     expect(listProducts().map((p) => p.nome)).toEqual(['X'])
+  })
+
+  it('merge: mesmo nome e tamanho mas cores (SKUs) diferentes ficam 2 artigos', async () => {
+    await importProducts([{ sku: 'AML-VD-S', sku_pai: 'AML-VD', nome: 'Camiseta Amílcar', cor: 'Verde', tamanho: 'S', qtd: 5, valor: 15 }])
+    const r = await importProducts([{ sku: 'AML-PR-S', sku_pai: 'AML-PR', nome: 'Camiseta Amílcar', cor: 'Preta', tamanho: 'S', qtd: 2, valor: 15 }], 'merge')
+    expect(r).toEqual({ created: 1, updated: 0 })
+    expect(listProducts().map((p) => [p.cor, p.qtd])).toEqual(expect.arrayContaining([['Verde', 5], ['Preta', 2]]))
   })
 })
 
@@ -100,6 +110,27 @@ describe('vendas', () => {
     expect(listProducts().map((p) => p.qtd)).toEqual([5, 5])
   })
 
+  it('registerSale copia sku, sku_pai e cor para a venda', async () => {
+    const id = await saveProduct({ sku: 'CAM-OLG-2XL', sku_pai: 'CAM-OLG', nome: 'Camiseta Olga', cor: '', tamanho: '2XL', qtd: 5, valor: 15 })
+    expect(listProducts()[0]).toMatchObject({ sku: 'CAM-OLG-2XL', sku_pai: 'CAM-OLG', cor: '' })
+    await registerSale({ items: [{ productId: id, quantidade: 1 }], nucleo: 'X' })
+    expect(listTransactions(today(), today())[0]).toMatchObject({ sku: 'CAM-OLG-2XL', sku_pai: 'CAM-OLG', cor: '' })
+  })
+
+  it('2 por 1 conta tamanhos diferentes do mesmo produto', async () => {
+    const a = await saveProduct({ sku: 'OLG-2XL', sku_pai: 'OLG', nome: 'Camiseta Olga', tamanho: '2XL', qtd: 5, valor: 15, promocao: 'LEVE_2_PAGUE_1' })
+    const b = await saveProduct({ sku: 'OLG-3XL', sku_pai: 'OLG', nome: 'Camiseta Olga', tamanho: '3XL', qtd: 5, valor: 15, promocao: 'LEVE_2_PAGUE_1' })
+    const r = await registerSale({ items: [{ productId: a, quantidade: 1 }, { productId: b, quantidade: 1 }], nucleo: 'X' })
+    expect(r.total).toBe(15)
+    const tx = listTransactions(today(), today()).sort((x, y) => x.sku.localeCompare(y.sku))
+    expect(tx.map((t) => [t.sku, t.preco, t.desconto])).toEqual([['OLG-2XL', 15, 0], ['OLG-3XL', 0, 15]])
+  })
+
+  it('a mensagem de stock insuficiente diz a cor', async () => {
+    const a = await saveProduct({ sku: 'AML-VD-S', sku_pai: 'AML-VD', nome: 'Camiseta Amílcar', cor: 'Verde', tamanho: 'S', qtd: 0, valor: 15 })
+    await expect(registerSale({ items: [{ productId: a, quantidade: 1 }], nucleo: 'X' })).rejects.toThrow('Stock insuficiente: Camiseta Amílcar · Verde · S (restam 0).')
+  })
+
   it('sem stock falha e não deixa nada alterado (transação)', async () => {
     const a = await saveProduct({ nome: 'A', qtd: 5, tamanho: 'M', valor: 10 })
     const b = await saveProduct({ nome: 'B', qtd: 0, tamanho: 'M', valor: 10 })
@@ -127,10 +158,10 @@ describe('stock ilimitado (produto "sem limite")', () => {
   })
 
   it('importar em merge só muda "sem limite" se o CSV tiver a coluna', async () => {
-    await importProducts([{ nome: 'Rifa', qtd: 0, tamanho: '', valor: 1, sem_limite: true }])
-    await importProducts([{ nome: 'Rifa', qtd: 0, tamanho: '', valor: 2 }], 'merge')
+    await importProducts([{ sku: 'RIFA', sku_pai: 'RIFA', nome: 'Rifa', qtd: 0, tamanho: '', valor: 1, sem_limite: true }])
+    await importProducts([{ sku: 'RIFA', sku_pai: 'RIFA', nome: 'Rifa', qtd: 0, tamanho: '', valor: 2 }], 'merge')
     expect(listProducts()[0]).toMatchObject({ valor: 2, sem_limite: true })
-    await importProducts([{ nome: 'Rifa', qtd: 0, tamanho: '', valor: 2, sem_limite: false }], 'merge')
+    await importProducts([{ sku: 'RIFA', sku_pai: 'RIFA', nome: 'Rifa', qtd: 0, tamanho: '', valor: 2, sem_limite: false }], 'merge')
     expect(listProducts()[0].sem_limite).toBe(false)
   })
 })
@@ -198,10 +229,10 @@ describe('caixa de destino', () => {
   })
 
   it('importar em merge só muda a caixa se o CSV tiver a coluna', async () => {
-    await importProducts([{ nome: 'A', qtd: 1, valor: 1, caixa_destino: 'C1' }])
-    await importProducts([{ nome: 'A', qtd: 2, valor: 1 }], 'merge')
+    await importProducts([{ sku: 'A', sku_pai: 'A', nome: 'A', qtd: 1, valor: 1, caixa_destino: 'C1' }])
+    await importProducts([{ sku: 'A', sku_pai: 'A', nome: 'A', qtd: 2, valor: 1 }], 'merge')
     expect(listProducts()[0].caixa_destino).toBe('C1')
-    await importProducts([{ nome: 'A', qtd: 2, valor: 1, caixa_destino: 'C2' }], 'merge')
+    await importProducts([{ sku: 'A', sku_pai: 'A', nome: 'A', qtd: 2, valor: 1, caixa_destino: 'C2' }], 'merge')
     expect(listProducts()[0].caixa_destino).toBe('C2')
   })
 })
@@ -220,5 +251,122 @@ describe('alterar produtos em lote', () => {
     expect(listProducts()[0]).toMatchObject({ promocao: 'LEVE_2_PAGUE_1', sem_limite: true, valor: 10 })
     expect(await deleteProducts([a, c])).toBe(2)
     expect(listProducts().map((p) => p.nome)).toEqual(['B'])
+  })
+})
+
+describe('peças (savePiece / deletePiece)', () => {
+  const peca = (variants: PieceInput['variants'], extra: Partial<PieceInput> = {}): PieceInput => ({
+    sku_pai: 'CAM-AMI-VE', nome: 'Camiseta Amílcar', cor: 'Verde', valor: 15, preco_especial: null, promocao: 'LEVE_2_PAGUE_1',
+    categorias: ['CAMISETA'], caixa_destino: 'PORTUGAL', variants, ...extra,
+  })
+
+  it('cria uma peça com vários tamanhos', async () => {
+    await savePiece(peca([
+      { sku: 'CAM-AMI-VE-S', tamanho: 'S', qtd: 5, sem_limite: false },
+      { sku: 'CAM-AMI-VE-M', tamanho: 'm', qtd: 2, sem_limite: false },
+    ]))
+    const ps = listProducts()
+    expect(ps).toHaveLength(2)
+    expect(ps.map((p) => p.tamanho).sort()).toEqual(['M', 'S'])
+    expect(ps[0]).toMatchObject({ sku_pai: 'CAM-AMI-VE', nome: 'Camiseta Amílcar', cor: 'Verde', valor: 15, promocao: 'LEVE_2_PAGUE_1', categorias: 'CAMISETA', caixa_destino: 'PORTUGAL' })
+  })
+
+  it('editar: atualiza os existentes, cria os novos e apaga os que saíram', async () => {
+    await savePiece(peca([{ sku: 'A-S', tamanho: 'S', qtd: 5, sem_limite: false }, { sku: 'A-M', tamanho: 'M', qtd: 2, sem_limite: false }], { sku_pai: 'A' }))
+    const s = listProducts().find((p) => p.sku === 'A-S')!
+    await savePiece(peca([{ id: s.id, sku: 'A-S', tamanho: 'S', qtd: 9, sem_limite: false }, { sku: 'A-L', tamanho: 'L', qtd: 1, sem_limite: false }], { sku_pai: 'A', valor: 18 }), 'A')
+    const ps = listProducts()
+    expect(ps.map((p) => [p.sku, p.qtd, p.valor]).sort()).toEqual([['A-L', 1, 18], ['A-S', 9, 18]])
+    expect(ps.find((p) => p.sku === 'A-S')!.id).toBe(s.id)
+  })
+
+  it('valor próprio de um tamanho sobrepõe o da peça', async () => {
+    await savePiece(peca([{ sku: 'A-S', tamanho: 'S', qtd: 1, sem_limite: false }, { sku: 'A-3XL', tamanho: '3XL', qtd: 1, sem_limite: false, valor: 18 }], { sku_pai: 'A' }))
+    expect(listProducts().map((p) => [p.sku, p.valor]).sort()).toEqual([['A-3XL', 18], ['A-S', 15]])
+  })
+
+  it('SKU repetido (no formulário ou noutra peça) é rejeitado e nada muda', async () => {
+    await savePiece(peca([{ sku: 'X-S', tamanho: 'S', qtd: 1, sem_limite: false }], { sku_pai: 'X' }))
+    await expect(savePiece(peca([{ sku: 'X-S', tamanho: 'S', qtd: 1, sem_limite: false }], { sku_pai: 'Y' }))).rejects.toThrow('SKU repetido: X-S')
+    await expect(savePiece(peca([{ sku: 'Z-S', tamanho: 'S', qtd: 1, sem_limite: false }, { sku: 'Z-S', tamanho: 'M', qtd: 1, sem_limite: false }], { sku_pai: 'Z' }))).rejects.toThrow('SKU repetido: Z-S')
+    await expect(savePiece(peca([{ sku: ' ', tamanho: 'S', qtd: 1, sem_limite: false }], { sku_pai: 'W' }))).rejects.toThrow('Falta o SKU')
+    expect(listProducts().map((p) => p.sku)).toEqual(['X-S'])
+  })
+
+  it('SKU da peça já usado por outra peça é rejeitado (não se misturam)', async () => {
+    await savePiece(peca([{ sku: 'CAM-OLG-S', tamanho: 'S', qtd: 1, sem_limite: false }], { sku_pai: 'CAM-OLG', nome: 'Camiseta Olga' }))
+    await expect(savePiece(peca([{ sku: 'CAM-OLG-L', tamanho: 'L', qtd: 1, sem_limite: false }], { sku_pai: 'CAM-OLG', nome: 'Camiseta Olgaria' })))
+      .rejects.toThrow('SKU da peça repetido: CAM-OLG')
+    // editar a própria peça mantendo o SKU continua a funcionar
+    const s = listProducts()[0]
+    await savePiece(peca([{ id: s.id, sku: 'CAM-OLG-S', tamanho: 'S', qtd: 3, sem_limite: false }], { sku_pai: 'CAM-OLG', nome: 'Camiseta Olga' }), 'CAM-OLG')
+    expect(listProducts().map((p) => [p.sku, p.qtd])).toEqual([['CAM-OLG-S', 3]])
+  })
+
+  it('promoção, preço especial e caixa "undefined" mantêm o valor de cada tamanho', async () => {
+    await importProducts([
+      { sku: 'A-S', sku_pai: 'A', nome: 'A', tamanho: 'S', qtd: 1, valor: 15, caixa_destino: 'PORTUGAL', promocao: 'LEVE_2_PAGUE_1' },
+      { sku: 'A-3XL', sku_pai: 'A', nome: 'A', tamanho: '3XL', qtd: 1, valor: 15, caixa_destino: 'BRASIL', promocao: null, preco_especial: 9 },
+    ])
+    const [s3, s] = ['A-3XL', 'A-S'].map((k) => listProducts().find((p) => p.sku === k)!)
+    await savePiece(peca([
+      { id: s.id, sku: 'A-S', tamanho: 'S', qtd: 5, sem_limite: false },
+      { id: s3.id, sku: 'A-3XL', tamanho: '3XL', qtd: 1, sem_limite: false },
+      { sku: 'A-L', tamanho: 'L', qtd: 2, sem_limite: false },
+    ], { sku_pai: 'A', nome: 'A', promocao: undefined, preco_especial: undefined, caixa_destino: undefined }), 'A')
+    const by = (k: string) => listProducts().find((p) => p.sku === k)!
+    expect(by('A-S')).toMatchObject({ qtd: 5, caixa_destino: 'PORTUGAL', promocao: 'LEVE_2_PAGUE_1', preco_especial: null })
+    expect(by('A-3XL')).toMatchObject({ caixa_destino: 'BRASIL', promocao: null, preco_especial: 9 })
+    // um tamanho novo fica com os valores do 1.º tamanho da peça
+    expect(by('A-L')).toMatchObject({ caixa_destino: 'PORTUGAL', promocao: 'LEVE_2_PAGUE_1' })
+  })
+
+  it('um tamanho de outra peça nunca é movido para esta (o id é ignorado)', async () => {
+    await savePiece(peca([{ sku: 'A-S', tamanho: 'S', qtd: 1, sem_limite: false }], { sku_pai: 'A', nome: 'A' }))
+    const a = listProducts()[0]
+    await savePiece(peca([{ id: a.id, sku: 'B-S', tamanho: 'S', qtd: 2, sem_limite: false }], { sku_pai: 'B', nome: 'B' }))
+    expect(listProducts().map((p) => [p.sku, p.sku_pai, p.nome]).sort()).toEqual([['A-S', 'A', 'A'], ['B-S', 'B', 'B']])
+  })
+
+  it('SKUs comparam-se sem distinguir maiúsculas', async () => {
+    await savePiece(peca([{ sku: 'cam-olg-s', tamanho: 'S', qtd: 1, sem_limite: false }], { sku_pai: 'cam-olg' }))
+    expect(listProducts()[0]).toMatchObject({ sku: 'CAM-OLG-S', sku_pai: 'CAM-OLG' })
+    await expect(savePiece(peca([{ sku: 'CAM-OLG-S', tamanho: 'S', qtd: 1, sem_limite: false }], { sku_pai: 'X' }))).rejects.toThrow('SKU repetido: CAM-OLG-S')
+  })
+
+  it('peça sem caixa de destino é recusada', async () => {
+    await expect(savePiece(peca([{ sku: 'A-S', tamanho: 'S', qtd: 1, sem_limite: false }], { sku_pai: 'A', caixa_destino: '  ' }))).rejects.toThrow('Falta a caixa de destino.')
+    expect(listProducts()).toEqual([])
+  })
+
+  it('deletePiece apaga todos os tamanhos e mantém as vendas', async () => {
+    await savePiece(peca([{ sku: 'A-S', tamanho: 'S', qtd: 5, sem_limite: false }, { sku: 'A-M', tamanho: 'M', qtd: 5, sem_limite: false }], { sku_pai: 'A' }))
+    await registerSale({ items: [{ productId: listProducts()[0].id, quantidade: 1 }], nucleo: 'X' })
+    expect(await deletePiece('A')).toBe(2)
+    expect(listProducts()).toEqual([])
+    expect(listTransactions(today(), today())).toHaveLength(1)
+  })
+
+  it('um tamanho removido que estava no carrinho sai do carrinho', async () => {
+    await savePiece(peca([{ sku: 'A-S', tamanho: 'S', qtd: 5, sem_limite: false }, { sku: 'A-M', tamanho: 'M', qtd: 5, sem_limite: false }], { sku_pai: 'A' }))
+    const [s, m] = ['A-S', 'A-M'].map((k) => listProducts().find((p) => p.sku === k)!)
+    useCart.getState().clearItems()
+    useCart.getState().setQty(s.id, 1)
+    useCart.getState().setQty(m.id, 1)
+    await savePiece(peca([{ id: s.id, sku: 'A-S', tamanho: 'S', qtd: 5, sem_limite: false }], { sku_pai: 'A' }), 'A')
+    useCart.getState().prune(listProductIds())
+    expect(Object.keys(useCart.getState().items)).toEqual([s.id])
+    const r = await registerSale({ items: [{ productId: s.id, quantidade: 1 }], nucleo: 'X' })
+    expect(r.total).toBe(15)
+  })
+})
+
+
+describe('Atualizar com só as colunas obrigatórias', () => {
+  it('não mexe no stock, na cor nem no tamanho (colunas ausentes ficam como estão)', async () => {
+    await importProducts(parseProductsCsv('SKU_FILHO,SKU_PAI,NOME_PRODUTO,COR,TAMANHO,QTD,VALOR,CAIXA\nCAM-OLG-S,CAM-OLG,Camiseta Olga,Azul,S,7,15,C1\n').products)
+    const r = parseProductsCsv('SKU_FILHO,SKU_PAI,NOME_PRODUTO,VALOR,CAIXA\nCAM-OLG-S,CAM-OLG,Camiseta Olga,18,C1\n')
+    await importProducts(r.products, 'merge')
+    expect(listProducts()[0]).toMatchObject({ sku: 'CAM-OLG-S', valor: 18, qtd: 7, cor: 'Azul', tamanho: 'S' })
   })
 })

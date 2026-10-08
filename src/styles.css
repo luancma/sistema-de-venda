@@ -791,3 +791,72 @@ label.invalid input { border-color: var(--pink); }
   }
   .pos.drawer-open .drawer-backdrop { opacity: 1; pointer-events: auto; }
 }
+
+/* ---------- Vender: cartão por peça, com os tamanhos lá dentro ---------- */
+.grid.pieces { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.4rem; }
+@media (max-width: 600px) { .grid.pieces { grid-template-columns: minmax(0, 1fr); gap: 1rem; } }
+.card.piece { display: flex; flex-direction: column; align-items: stretch; gap: .7rem; min-height: 0; padding: .8rem; }
+/* o cartão de uma peça com tamanhos não é um botão: só os tamanhos reagem ao toque */
+div.card.piece:hover { background: var(--navy); border-color: var(--border); }
+div.card.piece.in-cart:hover { border-color: var(--yellow); }
+.piece-name { font-size: 11px; line-height: 1.5; color: var(--text); }
+.piece-cor { color: var(--slate); }
+.piece-info { display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap; }
+.piece-info .card-price { margin: 0; }
+.piece-info .badge { margin: 0; }
+.sizes { display: flex; flex-wrap: wrap; gap: 8px; }
+/* área de toque ≥ 44px de altura */
+.size {
+  position: relative; display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+  min-width: 58px; min-height: 44px; padding: 8px 6px 6px; margin: 0; gap: 2px;
+  font-size: 10px; line-height: 1.4; background: transparent; color: var(--text); border: 2px solid var(--line);
+}
+.size small { font-size: 7px; color: var(--muted); }
+.size.sel { border-color: var(--yellow); background: var(--navy-light); }
+.size.sel small { color: var(--yellow); }
+.size.out { opacity: .45; border-style: dashed; }
+.size .q {
+  position: absolute; top: -8px; right: -8px; min-width: 16px; height: 16px; display: grid; place-items: center;
+  background: var(--yellow); color: var(--navy-deep); font-size: 7px;
+}
+.size:hover:not(:disabled) { border-color: var(--yellow); color: var(--yellow); background: var(--navy-light); }
+
+/* ---------- Produtos: uma linha por peça, com o stock de cada tamanho ---------- */
+.piece-list { display: flex; flex-direction: column; margin-top: .8rem; }
+.piece-list-all { flex-direction: row; align-items: center; gap: .6rem; padding: .4rem 0 .6rem; border-bottom: 2px solid var(--border); }
+.piece-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .8rem; align-items: start; padding: .9rem 0; border-bottom: 2px dotted var(--border); }
+.piece-row.picked { background: rgb(247 223 69 / .06); }
+.piece-row > input[type="checkbox"] { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--yellow); }
+.piece-row-main { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+.piece-sku { font-size: 8px; color: var(--slate); }
+.piece-sizes { display: flex; flex-wrap: wrap; gap: .3rem .9rem; font-size: 10px; line-height: 1.6; }
+.piece-sizes .esgotado { color: var(--pink); }
+.piece-sizes strong { font-weight: 400; color: var(--yellow); }
+.piece-tags { display: flex; flex-wrap: wrap; gap: .3rem; }
+.piece-row-side { display: flex; flex-direction: column; align-items: flex-end; gap: .45rem; text-align: right; }
+.piece-row-side .card-price { margin: 0; font-size: 11px; }
+.piece-row-side .badge { margin: 0; }
+
+/* ---------- formulário de peça: tabela de tamanhos ---------- */
+.size-table { display: flex; flex-direction: column; gap: .4rem; margin-top: .3rem; }
+.size-head, .size-row { display: grid; grid-template-columns: minmax(0, 1fr) 64px 52px minmax(0, 1.6fr) 40px; gap: .4rem; align-items: center; }
+.size-table.com-valor .size-head, .size-table.com-valor .size-row { grid-template-columns: minmax(0, 1fr) 60px 52px 72px minmax(0, 1.4fr) 40px; }
+.size-head { font-size: 7px; color: var(--muted); }
+.size-row input { margin: 0; min-width: 0; width: 100%; }
+.size-row .toggle { justify-self: center; }
+.size-row .size-sku { font-size: 8px; color: var(--slate); }
+.size-row .size-sku.erro { border-color: var(--pink); color: var(--pink); }
+.size-row .chip-icon { min-width: 40px; min-height: 40px; }
+.quick-sizes { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin: .5rem 0; }
+.quick-sizes button { margin: 0; }
+.quick-sizes button:disabled { opacity: .35; }
+@media (max-width: 600px) {
+  /* telemóvel: o SKU passa para uma 2.ª linha, com a largura toda (não fica cortado) */
+  .size-head, .size-row { grid-template-columns: minmax(0, 1fr) 58px 48px 44px; gap: .3rem; }
+  .size-table.com-valor .size-head, .size-table.com-valor .size-row { grid-template-columns: minmax(0, 1fr) 52px 48px 64px 44px; }
+  .size-head span:nth-last-child(2) { display: none; } /* título "SKU" */
+  .size-row { padding-bottom: .4rem; border-bottom: 1px dotted var(--border); }
+  .size-row .size-sku { grid-row: 2; grid-column: 1 / -2; }
+  .size-row .chip-icon { grid-row: 1; grid-column: -2; min-width: 44px; min-height: 44px; }
+}
+.piece-form input.erro { border-color: var(--pink); }

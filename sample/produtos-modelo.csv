@@ -1,0 +1,19 @@
+SKU_FILHO;SKU_PAI;NOME_PRODUTO;COR;TAMANHO;QTD;VALOR;CATEGORIA;CAIXA;PROMOCAO;PRECO ESPECIAL;SEM LIMITE
+CAM-OLG-S;CAM-OLG;Camiseta Olga;—;S;4;15,00;Camiseta, Olga;PORTUGAL;2 por 1;;
+CAM-OLG-M;CAM-OLG;Camiseta Olga;—;M;6;15,00;Camiseta, Olga;PORTUGAL;2 por 1;;
+CAM-OLG-L;CAM-OLG;Camiseta Olga;—;L;5;15,00;Camiseta, Olga;PORTUGAL;2 por 1;;
+CAM-OLG-XL;CAM-OLG;Camiseta Olga;—;XL;3;15,00;Camiseta, Olga;PORTUGAL;2 por 1;;
+CAM-OLG-2XL;CAM-OLG;Camiseta Olga;—;2XL;5;15,00;Camiseta, Olga;PORTUGAL;2 por 1;;
+CAM-OLG-3XL;CAM-OLG;Camiseta Olga;—;3XL;3;15,00;Camiseta, Olga;PORTUGAL;2 por 1;;
+CAM-AML-VD-S;CAM-AML-VD;Camiseta Amílcar;Verde;S;5;15,00;Camiseta;PORTUGAL;2 por 1;;
+CAM-AML-VD-M;CAM-AML-VD;Camiseta Amílcar;Verde;M;4;15,00;Camiseta;PORTUGAL;2 por 1;;
+CAM-AML-PR-XS;CAM-AML-PR;Camiseta Amílcar;Preta;XS;2;15,00;Camiseta;PORTUGAL;2 por 1;;
+CAM-AML-PR-S;CAM-AML-PR;Camiseta Amílcar;Preta;S;0;15,00;Camiseta;PORTUGAL;2 por 1;;
+CAM-FID-S;CAM-FID;Camiseta Fidel;—;S;7;15,00;Camiseta;BRASIL;;;
+CAM-FID-M;CAM-FID;Camiseta Fidel;—;M;5;15,00;Camiseta;BRASIL;;;
+CAM-FID-3XL;CAM-FID;Camiseta Fidel;—;3XL;2;18,00;Camiseta;BRASIL;;;
+CAN-LOG;CAN-LOG;Caneca Logo;Branca;Único;30;6,00;Acessório;BRASIL;3 por 15€;;
+BON-BOR;BON-BOR;Boné Bordado;Preto;Único;10;12,00;Acessório;PORTUGAL;;9,00;
+BOT-SOL;BOT-SOL;Botton Solidariedade;—;Único;50;2,00;Acessório;ESTANDE;LEVE_3_PAGUE_2;;
+LIV-CAP-01;LIV-CAP-01;As maravilhas do capitalismo...;—;Único;1;3,00;Livro;PORTUGAL;;;
+RIFA-01;RIFA-01;Rifa da feira;—;Único;;2,00;Rifa;ESTANDE;;;SIM

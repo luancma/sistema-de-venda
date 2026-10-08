@@ -2,8 +2,15 @@
 
 export interface Product {
   id: string
+  /** SKU do artigo (SKU_FILHO do CSV); único */
+  sku: string
+  /** SKU da peça (SKU_PAI): agrupa os tamanhos de uma peça */
+  sku_pai: string
   nome: string
+  /** '' = sem cor */
+  cor: string
   qtd: number
+  /** '' = tamanho único */
   tamanho: string
   valor: number
   /** código da promoção (ver lib/pricing.ts) */
@@ -24,7 +31,10 @@ export interface Transaction {
   /** ISO 8601 (UTC) */
   data: string
   produto_id: string | null
+  sku: string
+  sku_pai: string
   nome_produto: string
+  cor: string
   tamanho: string
   quantidade: number
   preco_unitario: number

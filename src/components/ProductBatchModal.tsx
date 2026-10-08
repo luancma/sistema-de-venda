@@ -23,9 +23,7 @@ export default function ProductBatchModal({ products, allCats, onClose, onDone }
 }) {
   const toast = useToast()
   const [valor, setValor] = useState('')
-  const [qtd, setQtd] = useState('')
   const [caixa, setCaixa] = useState('')
-  const [limparCaixa, setLimparCaixa] = useState(false)
   const [promo, setPromo] = useState(KEEP)
   const [semLimite, setSemLimite] = useState(false) // quantidade infinita
   const [add, setAdd] = useState<string[]>([])
@@ -42,15 +40,9 @@ export default function ProductBatchModal({ products, allCats, onClose, onDone }
       ch.valor = v
     }
     // quantidade: infinita (sem limite), um número (volta a controlar o stock) ou vazia (manter)
+    // a quantidade acerta-se em cada peça (ou pelo CSV); em lote só se pode pôr "sem limite"
     if (semLimite) ch.sem_limite = true
-    else if (qtd.trim()) {
-      const q = parseInt(qtd, 10)
-      if (!Number.isFinite(q)) return toast('Quantidade inválida.', 'error')
-      ch.qtd = q
-      ch.sem_limite = false
-    }
-    if (limparCaixa) ch.caixa_destino = ''
-    else if (caixa.trim()) ch.caixa_destino = caixa.trim()
+    if (caixa.trim()) ch.caixa_destino = caixa.trim() // a caixa é obrigatória: em lote só se muda, não se tira
     if (promo !== KEEP) ch.promocao = promo || null
     // o que ficou escrito no campo das categorias (sem Enter) também conta
     const novas = [...new Set([...add, ...parseCategorias(draft)])]
@@ -70,23 +62,17 @@ export default function ProductBatchModal({ products, allCats, onClose, onDone }
         <div className="form-grid">
           <label>Valor (€)<input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="— manter —" /></label>
           <div className="field">
-            Quantidade
-            {semLimite
-              ? <input value="∞ sem limite" disabled aria-label="Quantidade" />
-              : <input type="number" value={qtd} onChange={(e) => setQtd(e.target.value)} placeholder="— manter —" aria-label="Quantidade" />}
+            Sem limite
             <label className="toggle">
               <input type="checkbox" checked={semLimite} onChange={(e) => setSemLimite(e.target.checked)} />
               <span className="toggle-track" aria-hidden="true" />
-              <span>∞ Infinita <span className="muted">(nunca esgota)</span></span>
+              <span>∞ Ligar em todos <span className="muted">(nunca esgotam)</span></span>
             </label>
+            <span className="muted small">A quantidade acerta-se em cada peça (Editar) ou pelo CSV.</span>
           </div>
           <div className="span2 field">
             Caixa de destino
-            <input value={limparCaixa ? '' : caixa} onChange={(e) => setCaixa(e.target.value)} placeholder="— manter —" disabled={limparCaixa} aria-label="Caixa de destino" />
-            <label className="inline">
-              <input type="checkbox" checked={limparCaixa} onChange={(e) => setLimparCaixa(e.target.checked)} />
-              Tirar a caixa (deixar vazia)
-            </label>
+            <input value={caixa} onChange={(e) => setCaixa(e.target.value)} placeholder="— manter —" aria-label="Caixa de destino" />
           </div>
           <label className="span2">Promoção
             <select value={promo} onChange={(e) => setPromo(e.target.value)}>

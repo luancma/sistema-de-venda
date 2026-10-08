@@ -1,19 +1,29 @@
 import Papa from 'papaparse'
 import { normalizePromo } from './pricing.ts'
 import { parseCategorias } from './categorias.ts'
+import { normCor, normTamanho } from './pieces.ts'
+import type { Product } from '../types.ts'
 
 /** Produto lido do CSV (ainda sem id). */
 export interface ImportedProduct {
+  /** SKU_FILHO: identifica o artigo */
+  sku: string
+  /** SKU_PAI: a peça */
+  sku_pai: string
   nome: string
-  qtd: number
-  tamanho: string
+  /** '' = sem cor; undefined = o CSV não tem a coluna COR */
+  cor?: string
+  /** undefined = o CSV não tem a coluna QTD */
+  qtd?: number
+  /** '' = tamanho único; undefined = o CSV não tem a coluna TAMANHO */
+  tamanho?: string
   valor: number
   promocao: string | null
   preco_especial: number | null
   categorias: string[]
   /** undefined = o CSV não tem a coluna SEM LIMITE */
   sem_limite?: boolean
-  /** undefined = o CSV não tem a coluna CAIXA DE DESTINO */
+  /** caixa onde o artigo está guardado (coluna CAIXA, obrigatória no CSV) */
   caixa_destino?: string
 }
 
@@ -34,6 +44,11 @@ const normHeader = (h: unknown) =>
     .replace(/^_|_$/g, '')
 
 const HEADER_ALIASES: Record<string, string> = {
+  SKU_FILHO: 'sku',
+  SKU: 'sku',
+  SKU_PAI: 'sku_pai',
+  NOME_PRODUTO: 'nome',
+  COR: 'cor',
   NOME: 'nome',
   NOME_DO_PRODUTO: 'nome',
   PRODUTO: 'nome',
@@ -81,8 +96,12 @@ export function parseInteger(raw: unknown): number {
   return n == null ? 0 : Math.trunc(n)
 }
 
+/** colunas obrigatórias: campo interno -> nome no CSV */
+const OBRIGATORIAS: [string, string][] = [['sku', 'SKU_FILHO'], ['sku_pai', 'SKU_PAI'], ['nome', 'NOME_PRODUTO'], ['valor', 'VALOR'], ['caixa_destino', 'CAIXA']]
+
 /**
- * Lê o CSV de inicialização (NOME, QTD, TAMANHO, VALOR [, PROMOCAO, PRECO ESPECIAL, CATEGORIA, CAIXA DE DESTINO]).
+ * Lê o CSV de produtos: SKU_FILHO, SKU_PAI, NOME_PRODUTO, VALOR e CAIXA obrigatórios;
+ * COR, TAMANHO, QTD, CATEGORIA, PROMOCAO, PRECO ESPECIAL e SEM LIMITE opcionais.
  * O separador (tab, ; ou ,) é detetado automaticamente.
  * `errors`: linhas ignoradas; `warnings`: linhas importadas, mas com algo a rever.
  */
@@ -98,18 +117,43 @@ export function parseProductsCsv(text: string): { products: ImportedProduct[]; e
   const errors: string[] = []   // linhas ignoradas
   const warnings: string[] = [] // linhas importadas, mas com algo a rever
   const fields = res.meta.fields || []
-  for (const req of ['nome', 'qtd', 'valor']) {
-    if (!fields.includes(req)) errors.push(`Coluna obrigatória em falta: ${req.toUpperCase()}`)
+  for (const [req, coluna] of OBRIGATORIAS) {
+    if (!fields.includes(req)) errors.push(`Coluna obrigatória em falta: ${coluna}`)
   }
   if (errors.length) return { products: [], errors, warnings }
 
   const products: ImportedProduct[] = []
+  const vistos = new Set<string>() // SKU_FILHO já lidos
+  const pecas = new Map<string, string>() // SKU_PAI -> "nome|cor" da 1.ª linha
+  const avisadas = new Set<string>()
   res.data.forEach((row, i) => {
     const linha = i + 2
+    // SKUs em maiúsculas: "cam-olg-s" e "CAM-OLG-S" são o mesmo artigo
+    const sku = String(row.sku ?? '').trim().toUpperCase()
+    const sku_pai = String(row.sku_pai ?? '').trim().toUpperCase()
     const nome = String(row.nome ?? '').trim()
-    if (!nome) {
-      errors.push(`Linha ${linha}: sem NOME — ignorada`)
+    if (!sku || !sku_pai || !nome) {
+      errors.push(`Linha ${linha}: sem SKU_FILHO, SKU_PAI ou NOME_PRODUTO — ignorada`)
       return
+    }
+    if (vistos.has(sku)) {
+      errors.push(`Linha ${linha}: SKU_FILHO "${sku}" repetido — ignorada`)
+      return
+    }
+    // a caixa de destino é obrigatória em cada artigo
+    const caixa = String(row.caixa_destino ?? '').trim()
+    if (!caixa) {
+      errors.push(`Linha ${linha} (${sku}): sem CAIXA — ignorada`)
+      return
+    }
+    vistos.add(sku)
+    // colunas opcionais ausentes ficam undefined: ao Atualizar não mexem no valor atual
+    const cor = fields.includes('cor') ? normCor(row.cor) : undefined
+    const peca = `${nome}|${cor}`
+    if (!pecas.has(sku_pai)) pecas.set(sku_pai, peca)
+    else if (pecas.get(sku_pai) !== peca && !avisadas.has(sku_pai)) {
+      avisadas.add(sku_pai)
+      warnings.push(`SKU_PAI "${sku_pai}": nome ou cor diferentes entre linhas`)
     }
     const valorTxt = String(row.valor ?? '').trim()
     let valor = parseMoney(valorTxt)
@@ -130,16 +174,18 @@ export function parseProductsCsv(text: string): { products: ImportedProduct[]; e
       preco_especial = promo.preco_especial
     }
     products.push({
+      sku,
+      sku_pai,
       nome,
-      qtd: parseInteger(row.qtd),
-      // "DEFAULT" na folha = sem tamanho
-      tamanho: /^default$/i.test(String(row.tamanho ?? '').trim()) ? '' : String(row.tamanho ?? '').trim(),
+      cor,
+      qtd: fields.includes('qtd') ? parseInteger(row.qtd) : undefined,
+      tamanho: fields.includes('tamanho') ? normTamanho(row.tamanho) : undefined,
       valor,
       promocao: promo?.promocao ?? null,
       preco_especial,
       categorias: parseCategorias(row.categorias),
       sem_limite: fields.includes('sem_limite') ? parseSimNao(row.sem_limite) : undefined,
-      caixa_destino: fields.includes('caixa_destino') ? String(row.caixa_destino ?? '').trim() : undefined,
+      caixa_destino: caixa,
     })
   })
   return { products, errors, warnings }
@@ -169,4 +215,22 @@ export function downloadFile(filename: string, content: string | Blob, mime = 't
   a.click()
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+/** Stock no mesmo formato da importação (pode ser reimportado). */
+export function productsToCsv(products: Product[]): string {
+  return toCsv(products, [
+    { header: 'SKU_FILHO', value: 'sku' },
+    { header: 'SKU_PAI', value: 'sku_pai' },
+    { header: 'NOME_PRODUTO', value: 'nome' },
+    { header: 'COR', value: (p) => p.cor || '—' },
+    { header: 'TAMANHO', value: (p) => p.tamanho || 'Único' },
+    { header: 'QTD', value: 'qtd' },
+    { header: 'VALOR', value: (p) => ptNumber(p.valor) },
+    { header: 'CATEGORIA', value: (p) => parseCategorias(p.categorias).join(', ') },
+    { header: 'CAIXA', value: 'caixa_destino' },
+    { header: 'PROMOCAO', value: 'promocao' },
+    { header: 'PRECO ESPECIAL', value: (p) => ptNumber(p.preco_especial) },
+    { header: 'SEM LIMITE', value: (p) => (p.sem_limite ? 'SIM' : '') },
+  ], ',')
 }

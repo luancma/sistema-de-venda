@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { priceLine, parsePromo, promoLabel } from '../src/lib/pricing.ts'
+import { priceLine, parsePromo, promoLabel, priceCart, type CartItem, type LinePrice } from '../src/lib/pricing.ts'
 
 const p = (extra = {}) => ({ valor: 12.5, promocao: null, preco_especial: null, ...extra })
 
@@ -50,4 +50,64 @@ describe('normalizePromo', () => {
     ['3 por 10,50', 'PACK_3'], ['leve_2_pague_1', 'LEVE_2_PAGUE_1'], ['PACK_2', 'PACK_2'],
   ])('%s', (i, o) => expect(normalizePromo(i)?.promocao).toBe(o))
   it('desconhecido -> undefined', () => expect(normalizePromo('desconto amigo')).toBeUndefined())
+})
+
+describe('priceCart: promoções contam o produto inteiro', () => {
+  const item = (nome: string, valor: number, quantidade: number, promocao: string | null = 'LEVE_2_PAGUE_1', preco_especial: number | null = null): CartItem =>
+    ({ nome, valor, quantidade, promocao, preco_especial })
+  const totais = (r: LinePrice[]) => r.map((l) => l.total)
+  // soma ao cêntimo: total + desconto = bruto
+  const bate = (r: LinePrice[]) => {
+    const c = (n: number) => Math.round(n * 100)
+    expect(r.reduce((s, l) => s + c(l.total) + c(l.desconto), 0)).toBe(r.reduce((s, l) => s + c(l.bruto), 0))
+  }
+
+  it('2 por 1 junta tamanhos diferentes da mesma peça', () => {
+    const r = priceCart([item('Camiseta Olga', 15, 1), item('Camiseta Olga', 15, 1)])
+    expect(totais(r)).toEqual([15, 0])
+    expect(r.map((l) => l.desconto)).toEqual([0, 15])
+    bate(r)
+  })
+
+  it('2 por 1 junta cores diferentes (mesmo nome de produto)', () => {
+    const r = priceCart([item('Camiseta Amílcar', 15, 1), item('Camiseta Amílcar', 15, 1)])
+    expect(r.reduce((s, l) => s + l.total, 0)).toBe(15)
+    expect(r.reduce((s, l) => s + l.desconto, 0)).toBe(15)
+    bate(r)
+  })
+
+  it('com preços diferentes ficam grátis as unidades mais baratas', () => {
+    const r = priceCart([item('Camiseta', 12, 1), item('Camiseta', 15, 1)])
+    expect(totais(r)).toEqual([0, 15])
+    bate(r)
+  })
+
+  it('pack: os packs formam-se primeiro com as unidades mais caras', () => {
+    const r = priceCart([5, 5, 5, 4].map((v) => item('Boné', v, 1, 'PACK_3', 10)))
+    expect(r.reduce((s, l) => s + l.total, 0)).toBe(14)
+    expect(r[3].total).toBe(4) // a de 4 € fica fora do pack
+    bate(r)
+  })
+
+  it('mesmo nome com promoções diferentes não se junta', () => {
+    const r = priceCart([item('Camiseta Amílcar', 15, 1), item('Camiseta Amílcar', 15, 1, null)])
+    expect(totais(r)).toEqual([15, 15])
+  })
+
+  it('preço especial sem promoção é por unidade', () => {
+    const r = priceCart([item('Caneca', 6, 3, null, 5)])
+    expect(totais(r)).toEqual([15])
+    bate(r)
+  })
+
+  it('nome com maiúsculas/acentos diferentes conta como o mesmo produto', () => {
+    const r = priceCart([item('Camiseta Olga', 15, 1), item('camiseta olga', 15, 1)])
+    expect(r.reduce((s, l) => s + l.total, 0)).toBe(15)
+  })
+
+  it('várias unidades na mesma linha continuam a contar', () => {
+    const r = priceCart([item('Camiseta Olga', 15, 3), item('Camiseta Olga', 15, 1)])
+    expect(r.reduce((s, l) => s + l.total, 0)).toBe(30)
+    bate(r)
+  })
 })

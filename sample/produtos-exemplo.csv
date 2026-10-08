@@ -1,8 +1,7 @@
-NOME	QTD	TAMANHO	VALOR
-T-shirt Logo	20	S	12,50
-T-shirt Logo	25	M	12,50
-T-shirt Logo	15	L	12,50
-Caneca	30	Única	6,00
-Boné	10	Única	8,00
-Garrafa de água	40	500ml	1,00
-Pulseira	50	Única	2,50
+SKU_FILHO,SKU_PAI,NOME_PRODUTO,COR,TAMANHO,QTD,VALOR,CATEGORIA,CAIXA
+CAM-OLG-3XL,CAM-OLG,Camiseta Olga,—,3XL,3,15,Camiseta,PORTUGAL
+CAM-OLG-2XL,CAM-OLG,Camiseta Olga,—,2XL,5,15,Camiseta,PORTUGAL
+CAM-AML-VD-S,CAM-AML-VD,Camiseta Amílcar,Verde,S,5,15,Camiseta,PORTUGAL
+CAM-AML-PR-XS,CAM-AML-PR,Camiseta Amílcar,Preta,XS,2,15,Camiseta,PORTUGAL
+CAM-FID-S,CAM-FID,Camiseta Fidel,—,S,7,15,Camiseta,PORTUGAL
+LIV-CAP-01,LIV-CAP-01,As maravilhas do capitalismo...,—,Único,1,3,Livro,PORTUGAL

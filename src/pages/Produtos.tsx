@@ -1,34 +1,18 @@
-import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useMemo, useState, type ChangeEvent } from 'react'
 import { useQuery } from '../db/useDb.ts'
-import { listProducts, saveProduct, deleteProduct, deleteProducts, importProducts, listCategorias } from '../db/repo.ts'
-import { parseProductsCsv, parseMoney, toCsv, ptNumber, downloadFile } from '../lib/csv.ts'
-import { PROMO_PRESETS, parsePromo, promoLabel, priceLine, formatEuro } from '../lib/pricing.ts'
+import { listProducts, deleteProducts, importProducts, listCategorias } from '../db/repo.ts'
+import { parseProductsCsv, productsToCsv, downloadFile } from '../lib/csv.ts'
+import { formatEuro } from '../lib/pricing.ts'
+import { groupPieces, piecePromoLabel, type Piece } from '../lib/pieces.ts'
 import { useToast } from '../components/Toast.tsx'
 import { useConfirm } from '../components/ConfirmProvider.tsx'
 import CategoryFilter from '../components/CategoryFilter.tsx'
-import { parseCategorias, matchesCategorias } from '../lib/categorias.ts'
-import CategoriasInput from '../components/CategoriasInput.tsx'
-import { stockIlimitado, esgotado } from '../lib/stock.ts'
-import StockValue from '../components/StockValue.tsx'
+import { esgotado } from '../lib/stock.ts'
 import TrashIcon from '../components/TrashIcon.tsx'
 import ProductBatchModal from '../components/ProductBatchModal.tsx'
-import type { Product } from '../types.ts'
+import PieceForm from '../components/PieceForm.tsx'
 
-/** Produto a editar: um existente, ou um novo ainda vazio (valor e preço especial por preencher). */
-type EditingProduct = Omit<Product, 'id' | 'valor' | 'preco_especial' | 'categorias'> & {
-  id?: string
-  valor: number | ''
-  preco_especial: number | '' | null
-  categorias?: string | null
-}
-
-/** Estado do formulário: números ainda como texto (como foram escritos, ex.: "12,50"). */
-type FormState = Omit<EditingProduct, 'valor' | 'preco_especial' | 'categorias' | 'qtd'> & {
-  valor: string
-  preco_especial: string
-  qtd: number | string
-  categorias: string[]
-}
+const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
 interface ImportReport {
   title: string
@@ -43,7 +27,7 @@ export default function Produtos() {
   const confirm = useConfirm()
   const products = useQuery(listProducts)
   const categorias = useQuery(listCategorias)
-  const [editing, setEditing] = useState<EditingProduct | null>(null)
+  const [editing, setEditing] = useState<Piece | 'nova' | null>(null)
   const [mode, setMode] = useState<'replace' | 'merge'>('replace')
   const [filter, setFilter] = useState('')
   const [cats, setCats] = useState<string[]>([])
@@ -52,32 +36,41 @@ export default function Produtos() {
   const [selected, setSelected] = useState<string[]>([]) // ids marcados para alterar em lote
   const [batchOpen, setBatchOpen] = useState(false)
 
+  const pieces = useMemo(() => groupPieces(products), [products])
+  const semPreco = (pc: Piece) => pc.variants.some((v) => !(v.valor > 0))
   const shown = useMemo(() => {
-    const q = filter.trim().toLowerCase()
-    const base = products.filter((p) => matchesCategorias(p, cats) && (!onlyNoPrice || !(p.valor > 0)))
-    return q ? base.filter((p) => `${p.nome} ${p.tamanho}`.toLowerCase().includes(q)) : base
-  }, [products, filter, onlyNoPrice, cats])
-  const noPrice = products.filter((p) => !(p.valor > 0)).length
-  // só conta os marcados que ainda existem
+    const q = norm(filter.trim())
+    return pieces.filter((pc) =>
+      cats.every((c) => pc.categorias.includes(c)) && (!onlyNoPrice || semPreco(pc)) &&
+      (!q || norm([pc.nome, pc.cor, pc.sku_pai, ...pc.variants.map((v) => v.sku)].join(' ')).includes(q)))
+  }, [pieces, filter, onlyNoPrice, cats])
+  const noPrice = pieces.filter(semPreco).length
+  // seleção por peça: marcar uma peça marca todos os seus tamanhos (só contam os que ainda existem)
   const picked = useMemo(() => products.filter((p) => selected.includes(p.id)), [products, selected])
-  const allShownPicked = shown.length > 0 && shown.every((p) => selected.includes(p.id))
-  const toggle = (id: string) => setSelected(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id])
+  const pickedPieces = new Set(picked.map((p) => p.sku_pai)).size
+  const idsOf = (pc: Piece) => pc.variants.map((v) => v.id)
+  const isPicked = (pc: Piece) => idsOf(pc).every((id) => selected.includes(id))
+  const allShownPicked = shown.length > 0 && shown.every(isPicked)
+  const toggle = (pc: Piece) => {
+    const ids = idsOf(pc)
+    setSelected(isPicked(pc) ? selected.filter((id) => !ids.includes(id)) : [...new Set([...selected, ...ids])])
+  }
   const toggleShown = () => {
-    const ids = shown.map((p) => p.id)
+    const ids = shown.flatMap(idsOf)
     setSelected(allShownPicked ? selected.filter((id) => !ids.includes(id)) : [...new Set([...selected, ...ids])])
   }
 
   async function removePicked() {
     const ok = await confirm({
-      title: `Apagar ${picked.length} produto(s)?`,
-      message: 'As vendas já feitas não são afetadas.',
+      title: `Apagar ${pickedPieces} peça(s)?`,
+      message: `${picked.length} tamanho(s). As vendas já feitas não são afetadas.`,
       confirmLabel: 'Apagar',
       danger: true,
     })
     if (!ok) return
     const n = await deleteProducts(picked.map((p) => p.id))
     setSelected([])
-    toast(`${n} produto(s) apagado(s).`)
+    toast(`${n} artigo(s) apagado(s).`)
   }
 
   async function onFile(e: ChangeEvent<HTMLInputElement>) {
@@ -102,17 +95,8 @@ export default function Produtos() {
   }
 
   function exportStock() {
-    const csv = toCsv(products, [
-      { header: 'NOME', value: 'nome' },
-      { header: 'QTD', value: 'qtd' },
-      { header: 'TAMANHO', value: 'tamanho' },
-      { header: 'VALOR', value: (p) => ptNumber(p.valor) },
-      { header: 'PROMOCAO', value: 'promocao' },
-      { header: 'PRECO ESPECIAL', value: (p) => ptNumber(p.preco_especial) },
-      { header: 'CATEGORIA', value: (p) => parseCategorias(p.categorias).join(', ') },
-      { header: 'CAIXA DE DESTINO', value: 'caixa_destino' },
-      { header: 'SEM LIMITE', value: (p) => (stockIlimitado(p) ? 'SIM' : '') },
-    ], '\t')
+    // mesmo formato da importação: pode ser reimportado no dia seguinte
+    const csv = productsToCsv(products)
     downloadFile(`stock-${today()}.csv`, csv)
   }
 
@@ -123,7 +107,7 @@ export default function Produtos() {
         <div className="row wrap">
           <select value={mode} onChange={(e) => setMode(e.target.value as 'replace' | 'merge')}>
             <option value="replace">Substituir todos os produtos</option>
-            <option value="merge">Atualizar existentes (nome + tamanho) e adicionar novos</option>
+            <option value="merge">Atualizar existentes (por SKU) e adicionar novos</option>
           </select>
           <label className="button primary">
             Escolher ficheiro CSV
@@ -155,7 +139,7 @@ export default function Produtos() {
 
       <section className="panel">
         <div className="row wrap between">
-          <h2>Produtos ({products.length})</h2>
+          <h2>Produtos ({pieces.length} peças)</h2>
           <div className="row">
             {noPrice > 0 && (
               <label className="inline warn-text">
@@ -165,41 +149,56 @@ export default function Produtos() {
             )}
             <input placeholder="Filtrar…" value={filter} onChange={(e) => setFilter(e.target.value)} />
             <CategoryFilter products={products} selected={cats} onChange={setCats} />
-            <button className="primary" onClick={() => setEditing({ nome: '', qtd: 0, tamanho: '', valor: '', promocao: '', preco_especial: '', sem_limite: false, caixa_destino: '' })}>
-              + Novo produto
-            </button>
+            <button className="primary" onClick={() => setEditing('nova')}>+ Nova peça</button>
           </div>
         </div>
         {picked.length > 0 && (
           <div className="batch-bar row wrap">
-            <strong>{picked.length} selecionado(s)</strong>
+            <strong>{pickedPieces} peça(s) selecionada(s) ({picked.length} tamanhos)</strong>
             <button className="primary" onClick={() => setBatchOpen(true)}>Alterar em lote</button>
             <button className="danger with-icon" onClick={removePicked}><TrashIcon size={14} />Apagar</button>
             <button onClick={() => setSelected([])}>Limpar seleção</button>
           </div>
         )}
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr><th className="pick"><input type="checkbox" checked={allShownPicked} onChange={toggleShown} disabled={!shown.length}
-                aria-label="Selecionar todos os produtos mostrados" title="Selecionar todos os mostrados" /></th><th>Nome</th><th>Tamanho</th><th className="num">Qtd</th><th className="num">Valor</th><th>Categorias</th><th>Caixa</th><th>Promoção</th><th></th></tr>
-            </thead>
-            <tbody>
-              {shown.map((p) => (
-                <tr key={p.id} className={`${esgotado(p) ? 'out' : ''} ${selected.includes(p.id) ? 'picked' : ''}`}>
-                  <td className="pick"><input type="checkbox" checked={selected.includes(p.id)} onChange={() => toggle(p.id)} aria-label={`Selecionar ${p.nome} ${p.tamanho}`.trim()} /></td>
-                  <td>{p.nome}</td>
-                  <td>{p.tamanho}</td>
-                  <td className="num"><StockValue product={p} /></td>
-                  <td className="num">{p.valor > 0 ? formatEuro(p.valor) : <span className="badge warn">Sem preço</span>}</td>
-                  <td>{parseCategorias(p.categorias).map((c) => <span key={c} className="cat-tag">{c}</span>)}</td>
-                  <td className="nowrap">{p.caixa_destino}</td>
-                  <td>{promoLabel(p) && <span className="badge">{promoLabel(p)}</span>}</td>
-                  <td className="actions"><button onClick={() => setEditing({ ...p })}>Editar</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="piece-list">
+          {shown.length > 0 && (
+            <label className="piece-list-all">
+              <input type="checkbox" checked={allShownPicked} onChange={toggleShown} />
+              <span className="muted">Selecionar todas as mostradas</span>
+            </label>
+          )}
+          {shown.map((pc) => {
+            const promo = piecePromoLabel(pc)
+            return (
+              <div key={pc.sku_pai} className={`piece-row ${isPicked(pc) ? 'picked' : ''}`}>
+                <input type="checkbox" checked={isPicked(pc)} onChange={() => toggle(pc)}
+                  aria-label={`Selecionar ${[pc.nome, pc.cor].filter(Boolean).join(' ')}`} />
+                <div className="piece-row-main">
+                  <div className="piece-name">{pc.nome}{pc.cor && <span className="piece-cor"> · {pc.cor}</span>}</div>
+                  <div className="piece-sku">{pc.sku_pai}</div>
+                  <div className="piece-sizes">
+                    {pc.variants.map((v) => (
+                      <span key={v.id} className={esgotado(v) ? 'esgotado' : ''}>{v.tamanho || 'Único'} {v.sem_limite ? '∞' : v.qtd}</span>
+                    ))}
+                    {pc.variants.length > 1 && <strong>Total {pc.stockTotal == null ? '∞' : pc.stockTotal}</strong>}
+                  </div>
+                  <div className="piece-tags">
+                    {pc.categorias.map((c) => <span key={c} className="cat-tag">{c}</span>)}
+                    {pc.variants[0].caixa_destino && <span className="cat-tag">{pc.variants[0].caixa_destino}</span>}
+                  </div>
+                </div>
+                <div className="piece-row-side">
+                  <span className="card-price">
+                    {!(pc.precoMax > 0) ? <span className="badge warn">Sem preço</span>
+                      : pc.precoMin === pc.precoMax ? formatEuro(pc.precoMin) : `${formatEuro(pc.precoMin)}–${formatEuro(pc.precoMax)}`}
+                  </span>
+                  {promo && <span className="badge">{promo}</span>}
+                  <button className="small" onClick={() => setEditing(pc)}>Editar</button>
+                </div>
+              </div>
+            )
+          })}
+          {!shown.length && <p className="muted">Nenhuma peça encontrada.</p>}
         </div>
       </section>
 
@@ -207,131 +206,7 @@ export default function Produtos() {
         <ProductBatchModal products={picked} allCats={categorias.map(([c]) => c)}
           onClose={() => setBatchOpen(false)} onDone={() => { setBatchOpen(false); setSelected([]) }} />
       )}
-      {editing && <ProductForm initial={editing} allCats={categorias.map(([c]) => c)} onClose={() => setEditing(null)} />}
-    </div>
-  )
-}
-
-function presetFor(code: string | null): string {
-  if (!code) return ''
-  if (PROMO_PRESETS.some((p) => p.code === code)) return code
-  const p = parsePromo(code)
-  return p?.type === 'PACK' ? 'PACK_N' : p?.type === 'LEVE' ? 'LEVE_N_PAGUE_M' : ''
-}
-
-function ProductForm({ initial, allCats = [], onClose }: { initial: EditingProduct; allCats?: string[]; onClose: () => void }) {
-  const toast = useToast()
-  const confirm = useConfirm()
-  const parsed = parsePromo(initial.promocao)
-  const [f, setF] = useState<FormState>({
-    ...initial,
-    valor: initial.valor === '' ? '' : String(initial.valor).replace('.', ','),
-    preco_especial: initial.preco_especial == null ? '' : String(initial.preco_especial).replace('.', ','),
-    categorias: parseCategorias(initial.categorias),
-  })
-  const [preset, setPreset] = useState(presetFor(initial.promocao))
-  const [leve, setLeve] = useState(parsed?.type === 'LEVE' ? parsed.leve : 3)
-  const [pague, setPague] = useState(parsed?.type === 'LEVE' ? parsed.pague : 2)
-  const [packN, setPackN] = useState(parsed?.type === 'PACK' ? parsed.n : 3)
-  const set = (k: 'nome' | 'tamanho' | 'qtd' | 'valor' | 'preco_especial' | 'caixa_destino') => (e: ChangeEvent<HTMLInputElement>) =>
-    setF({ ...f, [k]: e.target.value })
-  const [catDraft, setCatDraft] = useState('') // categoria escrita mas ainda sem Enter
-
-  const promocao =
-    preset === 'LEVE_N_PAGUE_M' ? `LEVE_${leve}_PAGUE_${pague}` : preset === 'PACK_N' ? `PACK_${packN}` : preset
-  const candidate = { ...f, valor: parseMoney(f.valor), preco_especial: parseMoney(f.preco_especial), promocao: promocao || null }
-  const example = candidate.valor != null ? [1, 2, 3, 4, 6].map((q) => [q, priceLine(candidate, q).total]) : []
-
-  async function submit(e: FormEvent) {
-    e.preventDefault()
-    if (!f.nome.trim()) return toast('O nome é obrigatório.', 'error')
-    if (candidate.valor == null) return toast('Valor inválido.', 'error')
-    if (promocao && !parsePromo(promocao)) return toast('Promoção inválida: "pague" tem de ser menor que "leve".', 'error')
-    if (preset === 'PACK_N' && candidate.preco_especial == null) return toast('O pack precisa de um preço especial.', 'error')
-    // o que ficou escrito no campo das categorias (sem Enter) também conta
-    const categorias = [...new Set([...f.categorias, ...parseCategorias(catDraft)])]
-    await saveProduct({ ...candidate, categorias, qtd: parseInt(String(f.qtd), 10) || 0 })
-    toast('Produto guardado.')
-    onClose()
-  }
-
-  async function remove() {
-    if (!f.id) return // produto novo: ainda não há nada para apagar
-    const ok = await confirm({
-      title: 'Apagar produto?',
-      message: `${`${f.nome} ${f.tamanho}`.trim()}. As vendas já feitas não são afetadas.`,
-      confirmLabel: 'Apagar',
-      danger: true,
-    })
-    if (!ok) return
-    await deleteProduct(f.id)
-    toast('Produto apagado.')
-    onClose()
-  }
-
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-        <h2>{f.id ? 'Editar produto' : 'Novo produto'}</h2>
-        <div className="form-grid">
-          <label className="span2">Nome<input value={f.nome} onChange={set('nome')} autoFocus /></label>
-          <label>Tamanho<input value={f.tamanho} onChange={set('tamanho')} /></label>
-          <div className="field">
-            Quantidade
-            {f.sem_limite
-              ? <input value="∞ sem limite" disabled />
-              : <input type="number" value={f.qtd} onChange={set('qtd')} aria-label="Quantidade" />}
-            <label className="toggle">
-              <input type="checkbox" checked={Boolean(f.sem_limite)} onChange={(e) => setF({ ...f, sem_limite: e.target.checked })} />
-              <span className="toggle-track" aria-hidden="true" />
-              <span>Sem limite <span className="muted">(nunca esgota)</span></span>
-            </label>
-          </div>
-          <label>Valor (€)<input inputMode="decimal" value={f.valor} onChange={set('valor')} placeholder="0,00" /></label>
-          <label>Preço especial (€) <span className="muted">opcional</span>
-            <input inputMode="decimal" value={f.preco_especial} onChange={set('preco_especial')} placeholder="—" />
-          </label>
-          <div className="span2 field">
-            Categorias
-            <CategoriasInput value={f.categorias} onChange={(categorias) => setF({ ...f, categorias })}
-              draft={catDraft} onDraft={setCatDraft} sugestoes={allCats} />
-          </div>
-          <label className="span2">Caixa de destino <span className="muted">opcional</span>
-            <input value={f.caixa_destino} onChange={set('caixa_destino')} placeholder="—" />
-          </label>
-          <label className="span2">Promoção
-            <select value={preset} onChange={(e) => setPreset(e.target.value)}>
-              {PROMO_PRESETS.map((p) => <option key={p.code} value={p.code}>{p.label}</option>)}
-            </select>
-          </label>
-          {preset === 'LEVE_N_PAGUE_M' && (
-            <>
-              <label>Leve<input type="number" min="2" value={leve} onChange={(e) => setLeve(+e.target.value)} /></label>
-              <label>Pague<input type="number" min="0" value={pague} onChange={(e) => setPague(+e.target.value)} /></label>
-            </>
-          )}
-          {preset === 'PACK_N' && (
-            <label>Unidades no pack<input type="number" min="2" value={packN} onChange={(e) => setPackN(+e.target.value)} /></label>
-          )}
-        </div>
-        <p className="muted small">
-          {preset === 'PACK_N' && 'Cada pack de N unidades custa o "preço especial"; unidades a mais pagam o valor normal. '}
-          {!preset && 'Sem promoção: se houver preço especial, é usado como preço unitário. '}
-        </p>
-        {example.length > 0 && (
-          <div className="preview">
-            <span className="muted">Simulação:</span>
-            {example.map(([q, t]) => <span key={q}>{q}× = <strong>{formatEuro(t)}</strong></span>)}
-          </div>
-        )}
-        <div className="row between">
-          {f.id ? <button type="button" className="danger with-icon" onClick={remove}><TrashIcon size={14} />Apagar</button> : <span />}
-          <div className="row">
-            <button type="button" onClick={onClose}>Cancelar</button>
-            <button type="submit" className="primary">Guardar</button>
-          </div>
-        </div>
-      </form>
+      {editing && <PieceForm piece={editing === 'nova' ? null : editing} allCats={categorias.map(([c]) => c)} onClose={() => setEditing(null)} />}
     </div>
   )
 }

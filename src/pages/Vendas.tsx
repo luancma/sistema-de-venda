@@ -18,7 +18,7 @@ const exportTime = (iso: string) => { const d = new Date(iso); return `${pad(d.g
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })
 
 // Colunas do CSV exportado (contrato de transação + campos de contexto)
-const EXPORT_COLUMNS: CsvColumn<Transaction>[] = [
+export const EXPORT_COLUMNS: CsvColumn<Transaction>[] = [
   { header: 'DATA', value: (t) => exportDate(t.data) },
   { header: 'HORA', value: (t) => exportTime(t.data) },
   { header: 'NOME DO PRODUTO', value: 'nome_produto' },
@@ -38,6 +38,10 @@ const EXPORT_COLUMNS: CsvColumn<Transaction>[] = [
   { header: 'OBSERVACAO', value: 'observacao' },
   { header: 'VENDA', value: 'venda_id' },
   { header: 'ID', value: 'id' },
+  // colunas novas no fim: as folhas que leem o CSV pela posição das colunas continuam a funcionar
+  { header: 'SKU', value: 'sku' },
+  { header: 'SKU PAI', value: 'sku_pai' },
+  { header: 'COR', value: 'cor' },
 ]
 
 export default function Vendas() {

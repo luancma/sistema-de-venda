@@ -29,7 +29,10 @@ type Loose<T> = { [K in keyof T]?: unknown }
 
 export const normalizeProduct = (p: Loose<Product>): Product => ({
   id: str(p.id) || uuid(),
+  sku: str(p.sku).trim(),
+  sku_pai: str(p.sku_pai).trim(),
   nome: str(p.nome),
+  cor: str(p.cor).trim(),
   qtd: Math.trunc(num(p.qtd)),
   tamanho: str(p.tamanho),
   valor: num(p.valor),
@@ -45,7 +48,10 @@ export const normalizeTransaction = (t: Loose<Transaction>): Transaction => ({
   venda_id: str(t.venda_id),
   data: str(t.data), // ISO 8601 (UTC)
   produto_id: strOrNull(t.produto_id),
+  sku: str(t.sku),
+  sku_pai: str(t.sku_pai),
   nome_produto: str(t.nome_produto),
+  cor: str(t.cor),
   tamanho: str(t.tamanho),
   quantidade: Math.trunc(num(t.quantidade)),
   preco_unitario: num(t.preco_unitario),
